@@ -7,3 +7,7 @@ npm-debug.log*
 .DS_Store
 coverage/
 logs/
+
+# local-only
+.npm/
+.ssh/

@@ -18,6 +18,47 @@ function requireAdmin(req, res) {
   return true;
 }
 
+// RBAC (mínimo) — mantém compatibilidade com X-Admin-Key
+function isAdminKey(req) {
+  return !!ADMIN_KEY && req.headers["x-admin-key"] === ADMIN_KEY;
+}
+
+function getEffectiveRole(req, userRole) {
+  // Bypass operacional: X-Admin-Key sempre é admin
+  if (isAdminKey(req)) return "admin";
+  // Caso futuro (token/session): usar role do usuário autenticado
+  return (userRole || "user").toLowerCase();
+}
+
+function roleRank(role) {
+  const r = String(role || "user").toLowerCase();
+  if (r === "admin") return 3;
+  if (r === "editor") return 2;
+  return 1; // user
+}
+
+function requireRole(minRole) {
+  return (req, res, next) => {
+    // Nesta fase (B:A), ainda não temos login/token.
+    // Então o role real vem do bypass (admin-key) ou default user.
+    const effective = getEffectiveRole(req, null);
+
+    if (roleRank(effective) < roleRank(minRole)) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+    next();
+  };
+}
+
+function requireMinRole(req, res, minRole) {
+  const effective = getEffectiveRole(req, null);
+  if (roleRank(effective) < roleRank(minRole)) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return false;
+  }
+  return true;
+}
+
 function normalizeSlug(input) {
   return String(input || "")
     .trim()
@@ -140,9 +181,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/admin/schema", async (req, res) => {
-  if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
+  if (!requireMinRole(req, res, "admin")) return;
 
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
@@ -175,7 +214,7 @@ app.get("/admin/schema", async (req, res) => {
 });
 
 app.post("/admin/news", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "editor")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -229,8 +268,19 @@ app.post("/admin/news", async (req, res) => {
   }
 });
 
+app.get("/admin/whoami", async (req, res) => {
+  // não exige DB
+  const hasAdminKey = !!ADMIN_KEY && req.headers["x-admin-key"] === ADMIN_KEY;
+
+  return res.json({
+    ok: true,
+    auth: hasAdminKey ? "admin-key" : "none",
+    role: hasAdminKey ? "admin" : "user",
+  });
+});
+
 app.get("/admin/news", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "editor")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -257,7 +307,7 @@ app.get("/admin/news", async (req, res) => {
 });
 
 app.post("/admin/news/:id/publish", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "admin")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -306,7 +356,7 @@ app.post("/admin/news/:id/publish", async (req, res) => {
 });
 
 app.patch("/admin/news/:id", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "editor")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -395,7 +445,7 @@ app.patch("/admin/news/:id", async (req, res) => {
 });
 
 app.post("/admin/news/:id/unpublish", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "admin")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -443,7 +493,7 @@ app.post("/admin/news/:id/unpublish", async (req, res) => {
 });
 
 app.delete("/admin/news/:id", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!requireMinRole(req, res, "admin")) return;
   if (!dbReady)
     return res.status(503).json({ ok: false, error: "db_not_ready" });
 
