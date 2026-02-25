@@ -7,7 +7,9 @@ let dbReady = false;
 let dbError = null;
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const portEnv = process.env.PORT;
+const port = portEnv ? Number(portEnv) : 3000;
+if (!portEnv) console.warn("[hsc-auth] PORT env missing; falling back to 3000 (ok for local/dev only).");
 const ADMIN_KEY = process.env.ADMIN_KEY;
 
 function requireAdmin(req, res) {
