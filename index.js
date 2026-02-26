@@ -12,6 +12,35 @@ import {
   readSessionId,
 } from "./sessions.js";
 
+import fs from "fs";
+
+function bootWrite(obj) {
+  try {
+    fs.writeFileSync("./__boot.json", JSON.stringify(obj, null, 2));
+  } catch (_) {}
+}
+
+process.on("uncaughtException", (err) => {
+  bootWrite({ stage: "uncaughtException", ts: new Date().toISOString(), err: String(err), stack: err?.stack });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  bootWrite({ stage: "unhandledRejection", ts: new Date().toISOString(), err: String(err), stack: err?.stack });
+  process.exit(1);
+});
+
+// marca que o processo pelo menos iniciou
+bootWrite({
+  stage: "boot-start",
+  ts: new Date().toISOString(),
+  node: process.version,
+  hasPORT: !!process.env.PORT,
+  PORT: process.env.PORT || null,
+  hasDB_HOST: !!process.env.DB_HOST,
+  hasADMIN_KEY: !!process.env.ADMIN_KEY,
+});
+
 let dbReady = false;
 let dbError = null;
 
