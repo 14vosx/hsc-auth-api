@@ -2,17 +2,26 @@ name: Deploy (Lightsail)
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - "v*"
+      - "release-*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag para deploy (ex: v0.1.4 ou release-YYYYMMDD-HHMMSS)"
+        required: false
+        type: string
+      rollback:
+        description: "Executar rollback para a tag anterior (usa state file no servidor)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: SSH Deploy to Lightsail
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -20,4 +29,18 @@ jobs:
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            sudo /opt/hsc/deploy-auth.sh
+            set -e
+            if [ "${{ github.event_name }}" = "push" ]; then
+              TAG="${GITHUB_REF_NAME}"
+              /opt/hsc/deploy-auth.sh "$TAG"
+            else
+              if [ "${{ inputs.rollback }}" = "true" ]; then
+                /opt/hsc/deploy-auth.sh --rollback
+              else
+                if [ -z "${{ inputs.tag }}" ]; then
+                  echo "❌ workflow_dispatch requer inputs.tag OU inputs.rollback=true"
+                  exit 1
+                fi
+                /opt/hsc/deploy-auth.sh "${{ inputs.tag }}"
+              fi
+            fi
