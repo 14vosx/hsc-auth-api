@@ -32,15 +32,15 @@ jobs:
             set -e
             if [ "${{ github.event_name }}" = "push" ]; then
               TAG="${{ github.ref_name }}"
-              /opt/hsc/deploy-auth.sh "$TAG"
+              sudo -u hscadmin -H /opt/hsc/deploy-auth.sh "$TAG"
             else
               if [ "${{ inputs.rollback }}" = "true" ]; then
-                /opt/hsc/deploy-auth.sh --rollback
+                sudo -u hscadmin -H /opt/hsc/deploy-auth.sh --rollback
               else
                 if [ -z "${{ inputs.tag }}" ]; then
                   echo "❌ workflow_dispatch requer inputs.tag OU inputs.rollback=true"
                   exit 1
                 fi
-                /opt/hsc/deploy-auth.sh "${{ inputs.tag }}"
+                sudo -u hscadmin -H /opt/hsc/deploy-auth.sh "${{ inputs.tag }}"
               fi
             fi
