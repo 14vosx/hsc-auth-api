@@ -51,10 +51,16 @@ echo "➡️  Target tag: $TAG"
 echo "➡️  Fetch tags..."
 git fetch --tags --prune
 
-CURRENT_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-if [[ -n "$CURRENT_TAG" ]]; then
-  echo "$CURRENT_TAG" | sudo tee "$STATE_FILE" >/dev/null
-  echo "📝 Saved last tag: $CURRENT_TAG -> $STATE_FILE"
+PREV_TAG="$(git tag --points-at HEAD 2>/dev/null | head -n 1 || true)"
+if [[ -z "${PREV_TAG:-}" ]]; then
+  PREV_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+fi
+
+if [[ -n "${PREV_TAG:-}" && "${PREV_TAG}" != "${TAG}" ]]; then
+  echo "$PREV_TAG" | sudo tee "$STATE_FILE" >/dev/null
+  echo "📝 Saved last tag: $PREV_TAG -> $STATE_FILE"
+else
+  echo "📝 Skip saving last tag (prev='${PREV_TAG:-<none>}' target='${TAG}')"
 fi
 
 echo "➡️  Checkout forçado da tag (detached HEAD)..."
