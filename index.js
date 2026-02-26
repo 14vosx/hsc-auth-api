@@ -2,6 +2,15 @@ import express from "express";
 import cors from "cors";
 import mysql from "mysql2/promise";
 import "dotenv/config";
+import cookieParser from "cookie-parser";
+import {
+  createSession,
+  getSession,
+  revokeSession,
+  setSessionCookie,
+  clearSessionCookie,
+  readSessionId,
+} from "./sessions.js";
 
 let dbReady = false;
 let dbError = null;
@@ -97,6 +106,7 @@ const dbConfig = {
 };
 
 app.use(cors(corsOptions));
+app.use(cookieParser());
 
 // Preflight cobrindo tudo + mesmas opções
 app.options(/.*/, cors(corsOptions));
@@ -526,6 +536,71 @@ app.delete("/admin/news/:id", async (req, res) => {
   } catch (_err) {
     return res.status(500).json({ ok: false, error: "db_error" });
   }
+});
+
+app.post("/__dev/login-as/:userId", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  if (!dbReady) return res.status(503).json({ ok: false, error: "db_not_ready" });
+
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ ok: false, error: "invalid_user_id" });
+  }
+
+  try {
+    const sid = await createSession(dbConfig, userId);
+    setSessionCookie(res, sid);
+    return res.json({ ok: true, userId });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "db_error" });
+  }
+});
+
+app.get("/auth/me", async (req, res) => {
+  if (!dbReady) return res.status(503).json({ ok: false, error: "db_not_ready" });
+
+  const sid = readSessionId(req);
+  if (!sid) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+
+  try {
+    const userId = await getSession(dbConfig, sid);
+    if (!userId) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT id, email, display_name FROM users WHERE id = ? LIMIT 1`,
+      [userId],
+    );
+    await connection.end();
+
+    if (!rows.length) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+
+    return res.json({
+      ok: true,
+      user: {
+        id: rows[0].id,
+        email: rows[0].email,
+        displayName: rows[0].display_name,
+        // role entra depois (quando estiver no users/profiles)
+      },
+    });
+  } catch (_err) {
+    return res.status(500).json({ ok: false, error: "db_error" });
+  }
+});
+
+app.post("/auth/logout", async (req, res) => {
+  const sid = readSessionId(req);
+
+  try {
+    if (dbReady && sid) await revokeSession(dbConfig, sid);
+  } catch (_err) {
+    // idempotente: mesmo se falhar, limpamos cookie
+  }
+
+  clearSessionCookie(res);
+  return res.json({ ok: true });
 });
 
 app.get("/content/news", async (_req, res) => {
