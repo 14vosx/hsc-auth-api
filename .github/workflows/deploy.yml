@@ -31,7 +31,7 @@ jobs:
           script: |
             set -e
             if [ "${{ github.event_name }}" = "push" ]; then
-              TAG="${GITHUB_REF_NAME}"
+              TAG="${{ github.ref_name }}"
               /opt/hsc/deploy-auth.sh "$TAG"
             else
               if [ "${{ inputs.rollback }}" = "true" ]; then
