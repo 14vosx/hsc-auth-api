@@ -717,6 +717,6 @@ if (process.env.DB_HOST) {
   console.warn("DB not configured. Skipping schema bootstrap.");
 }
 
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`[hsc-auth] listening on http://0.0.0.0:${port}`);
 });
