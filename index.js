@@ -538,6 +538,45 @@ app.delete("/admin/news/:id", async (req, res) => {
   }
 });
 
+app.post("/__dev/seed-user", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  if (!dbReady) return res.status(503).json({ ok: false, error: "db_not_ready" });
+
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const displayName = String(req.body?.displayName || "").trim();
+
+  if (!email) return res.status(400).json({ ok: false, error: "missing_email" });
+  if (!displayName) return res.status(400).json({ ok: false, error: "missing_displayName" });
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // cria se não existir
+    await connection.execute(
+      `
+      INSERT INTO users (email, display_name)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)
+      `,
+      [email, displayName],
+    );
+
+    const [rows] = await connection.execute(
+      `SELECT id, email, display_name FROM users WHERE email = ? LIMIT 1`,
+      [email],
+    );
+
+    await connection.end();
+
+    return res.json({
+      ok: true,
+      user: { id: rows[0].id, email: rows[0].email, displayName: rows[0].display_name },
+    });
+  } catch (_err) {
+    return res.status(500).json({ ok: false, error: "db_error" });
+  }
+});
+
 app.post("/__dev/login-as/:userId", async (req, res) => {
   if (!requireAdmin(req, res)) return;
 
