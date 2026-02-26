@@ -44,13 +44,16 @@ const corsOptions = {
   maxAge: 86400,
 };
 
+const DB_HOST = process.env.DB_HOST || "127.0.0.1";
+const isLocalDb = DB_HOST === "127.0.0.1" || DB_HOST === "localhost";
+
 const dbConfig = {
-  host: process.env.DB_HOST,
+  host: DB_HOST,
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-  ssl: { rejectUnauthorized: false },
+  ...(isLocalDb ? {} : { ssl: { rejectUnauthorized: false } }),
 };
 
 app.use(cors(corsOptions));
