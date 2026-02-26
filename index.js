@@ -747,5 +747,6 @@ if (process.env.DB_HOST) {
 }
 
 app.listen(port, "0.0.0.0", () => {
+  bootWrite({ stage: "listening", ts: new Date().toISOString(), port });
   console.log(`[hsc-auth] listening on http://0.0.0.0:${port}`);
 });
