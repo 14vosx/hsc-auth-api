@@ -7,3 +7,7 @@ npm-debug.log*
 .DS_Store
 coverage/
 logs/
+
+# local/editor backups
+index.js.save
+index.js.bak.*
