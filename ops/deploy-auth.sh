@@ -92,6 +92,18 @@ if ! curl -fsS "http://127.0.0.1:3000/content/news" | grep '"ok":true' >/dev/nul
   exit 1
 fi
 
+echo "➡️  Smoke: /content/seasons ..."
+if ! curl -fsS "http://127.0.0.1:3000/content/seasons" | grep '"ok":true' >/dev/null; then
+  echo "❌ Smoke /content/seasons falhou."
+  exit 1
+fi
+
+echo "➡️  Smoke: /content/seasons/active ..."
+if ! curl -fsS "http://127.0.0.1:3000/content/seasons/active" | grep '"ok":true' >/dev/null; then
+  echo "❌ Smoke /content/seasons/active falhou."
+  exit 1
+fi
+
 echo "➡️  Smoke: /admin/schema ..."
 ADMIN_KEY_ENV="$(grep -m1 '^ADMIN_KEY=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r\n')"
 if [[ -z "$ADMIN_KEY_ENV" ]]; then
