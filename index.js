@@ -17,10 +17,15 @@ import {
 import { normalizeSlug } from "./src/utils/slug.js";
 import { ensureSchema } from "./src/db/schema.js";
 import { loadEnv } from "./src/config/env.js";
+import { registerHealthRoutes } from "./src/routes/health.js";
 loadEnv();
 
 let dbReady = false;
 let dbError = null;
+
+function getDbStatus() {
+  return { ready: dbReady, error: dbError ? "schema_bootstrap_failed" : null };
+}
 
 const app = express();
 const { corsMiddleware, preflightMiddleware, preflightPattern, corsMeta } = buildCors();
@@ -29,6 +34,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(corsMiddleware);
 app.options(preflightPattern, preflightMiddleware);
+
+registerHealthRoutes(app, { corsMeta, getDbStatus });
 
 const port = Number(process.env.PORT || 3000);
 
@@ -39,16 +46,6 @@ const dbConfig = buildDbConfig();
 
 const seasonsRepo = createSeasonsRepo(dbConfig);
 
-
-app.get("/health", (_req, res) => {
-  res.status(200).json({
-    ok: true,
-    service: "hsc-auth-api",
-    ts: new Date().toISOString(),
-    cors: corsMeta,
-    db: { ready: dbReady, error: dbError ? "schema_bootstrap_failed" : null },
-  });
-});
 
 app.get("/admin/schema", async (req, res) => {
   if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
