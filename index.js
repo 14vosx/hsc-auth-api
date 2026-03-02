@@ -11,6 +11,7 @@ import {
   sendConflict,
 } from "./src/utils/http.js";
 import { normalizeSlug } from "./src/utils/slug.js";
+import { parseUtcIsoToDatetime } from "./src/utils/datetime.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
 
@@ -18,36 +19,18 @@ let dbReady = false;
 let dbError = null;
 
 const app = express();
+const { corsMiddleware, preflightMiddleware, preflightPattern, corsMeta } = buildCors();
+// Body parsers (DEV/HSC) — precisa vir antes das rotas
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(corsMiddleware);
+app.options(preflightPattern, preflightMiddleware);
+
 const port = Number(process.env.PORT || 3000);
 
 const ADMIN_KEY = process.env.ADMIN_KEY;
 const requireAdmin = createRequireAdmin(ADMIN_KEY);
 
-function formatUtcDatetime(date) {
-  // Returns "YYYY-MM-DD HH:MM:SS" in UTC
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    `${date.getUTCFullYear()}-` +
-    `${pad(date.getUTCMonth() + 1)}-` +
-    `${pad(date.getUTCDate())} ` +
-    `${pad(date.getUTCHours())}:` +
-    `${pad(date.getUTCMinutes())}:` +
-    `${pad(date.getUTCSeconds())}`
-  );
-}
-
-function parseUtcIsoToDatetime(value) {
-  // Strict: must be ISO-like and must include trailing 'Z' (UTC)
-  const s = String(value || "").trim();
-  if (!s) return { ok: false, error: "missing_datetime" };
-  if (!s.endsWith("Z")) return { ok: false, error: "datetime_must_be_utc_z" };
-
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime()))
-    return { ok: false, error: "invalid_datetime" };
-
-  return { ok: true, datetime: formatUtcDatetime(d) };
-}
 
 function validateSeasonInput({ slug, name, start_at, end_at }) {
   const cleanSlug = normalizeSlug(slug);
@@ -78,11 +61,6 @@ function validateSeasonInput({ slug, name, start_at, end_at }) {
   };
 }
 
-const { corsMiddleware, preflightMiddleware, preflightPattern, corsMeta } = buildCors();
-
-app.use(corsMiddleware);
-// Preflight cobrindo tudo + mesmas opções
-app.options(preflightPattern, preflightMiddleware);
 
 const dbConfig = buildDbConfig();
 
