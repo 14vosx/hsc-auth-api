@@ -22,6 +22,7 @@ import { registerContentNewsRoutes } from "./src/routes/content/news.js";
 import { registerContentSeasonsRoutes } from "./src/routes/content/seasons.js";
 import { registerAdminSchemaRoute } from "./src/routes/admin/schema.js";
 import { registerAdminNewsCreateRoute } from "./src/routes/admin/news.create.js";
+import { registerAdminNewsListRoute } from "./src/routes/admin/news.list.js";
 loadEnv();
 
 let dbReady = false;
@@ -70,6 +71,7 @@ registerAdminNewsCreateRoute(app, {
   getDbReady,
   normalizeSlug,
 });
+registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
 
 app.post("/admin/seasons", async (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -171,33 +173,6 @@ app.post("/admin/seasons/:slug/close", async (req, res) => {
     return res.status(200).json({ ok: true, slug, status: "closed" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.get("/admin/news", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-
-    const [rows] = await connection.execute(`
-      SELECT id, slug, title, status, created_at, updated_at
-      FROM news
-      ORDER BY created_at DESC
-      LIMIT 20
-    `);
-
-    await connection.end();
-
-    return res.json({
-      ok: true,
-      count: rows.length,
-      items: rows,
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: "db_error" });
   }
 });
 
