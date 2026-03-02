@@ -7,6 +7,10 @@ HEALTH_URL="http://127.0.0.1:3000/health"
 LOG_DIR="/var/log/hsc"
 LOG_FILE="$LOG_DIR/deploy-auth.log"
 
+EXPECTED_HOST="ip-172-26-2-109"
+LOCK_FILE="/tmp/hsc-auth-deploy.lock"
+STATE_FILE="/opt/hsc/.deploy-auth-last-tag"
+
 mkdir -p "$LOG_DIR"
 
 # log: tudo que sai no terminal também vai para arquivo
@@ -19,14 +23,41 @@ echo "Host: $(hostname)"
 echo "User: $(whoami)"
 echo "======================================"
 
-if [ ! -d "$APP_DIR" ]; then
+# Guard: roda somente no host correto (evita acidentes)
+if [[ "$(hostname)" != "$EXPECTED_HOST" ]]; then
+  echo "❌ Este script só pode rodar no host: $EXPECTED_HOST (atual: $(hostname))"
+  exit 1
+fi
+
+# Garantir flock disponível
+if ! command -v flock >/dev/null 2>&1; then
+  echo "❌ 'flock' não encontrado. Instale 'util-linux' (Ubuntu): sudo apt-get install -y util-linux"
+  exit 1
+fi
+
+# Lock anti-concorrência: 1 deploy por vez
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "❌ Deploy já em execução (lock: $LOCK_FILE)."
+  exit 1
+fi
+
+if [[ ! -d "$APP_DIR" ]]; then
   echo "❌ Diretório da aplicação não encontrado: $APP_DIR"
   exit 1
 fi
 
 cd "$APP_DIR"
 
-STATE_FILE="/opt/hsc/.deploy-auth-last-tag"
+# .env parametrizável (default: .env)
+ENV_FILE="${ENV_FILE:-.env}"
+
+# Admin key necessária para smoke em /admin/*
+ADMIN_KEY_ENV="$(grep -m1 '^ADMIN_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '\r\n')"
+if [[ -z "${ADMIN_KEY_ENV:-}" ]]; then
+  echo "❌ ADMIN_KEY não encontrado em $APP_DIR/$ENV_FILE (necessário para smoke admin)."
+  exit 1
+fi
 
 if [[ "${1:-}" == "--rollback" ]]; then
   if [[ ! -f "$STATE_FILE" ]]; then
@@ -56,6 +87,7 @@ if [[ -z "${PREV_TAG:-}" ]]; then
   PREV_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
 fi
 
+# Salvar a tag anterior para rollback (somente quando fizer sentido)
 if [[ -n "${PREV_TAG:-}" && "${PREV_TAG}" != "${TAG}" ]]; then
   echo "$PREV_TAG" | sudo tee "$STATE_FILE" >/dev/null
   echo "📝 Saved last tag: $PREV_TAG -> $STATE_FILE"
@@ -105,11 +137,6 @@ if ! curl -fsS "http://127.0.0.1:3000/content/seasons/active" | grep '"ok":true'
 fi
 
 echo "➡️  Smoke: /admin/schema ..."
-ADMIN_KEY_ENV="$(grep -m1 '^ADMIN_KEY=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r\n')"
-if [[ -z "$ADMIN_KEY_ENV" ]]; then
-  echo "❌ ADMIN_KEY não encontrado em .env (necessário para smoke admin)."
-  exit 1
-fi
 if ! curl -fsS "http://127.0.0.1:3000/admin/schema" -H "X-Admin-Key: $ADMIN_KEY_ENV" | grep '"ok":true' >/dev/null; then
   echo "❌ Smoke admin (/admin/schema) falhou."
   exit 1

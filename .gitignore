@@ -11,3 +11,4 @@ logs/
 # local/editor backups
 index.js.save
 index.js.bak.*
+.env.local

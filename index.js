@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
 import mysql from "mysql2/promise";
-import "dotenv/config";
 import { createSeasonsRepo } from "./seasons.repo.js";
+import dotenv from "dotenv";
+dotenv.config({ path: process.env.ENV_FILE || ".env.local" });
 
 let dbReady = false;
 let dbError = null;
