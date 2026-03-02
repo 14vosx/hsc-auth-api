@@ -10,6 +10,7 @@ import {
   sendNotFound,
   sendConflict,
 } from "./src/utils/http.js";
+import { normalizeSlug } from "./src/utils/slug.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
 
@@ -21,16 +22,6 @@ const port = Number(process.env.PORT || 3000);
 
 const ADMIN_KEY = process.env.ADMIN_KEY;
 const requireAdmin = createRequireAdmin(ADMIN_KEY);
-
-function normalizeSlug(input) {
-  return String(input || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 function formatUtcDatetime(date) {
   // Returns "YYYY-MM-DD HH:MM:SS" in UTC
