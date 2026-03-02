@@ -24,6 +24,7 @@ import { registerAdminSchemaRoute } from "./src/routes/admin/schema.js";
 import { registerAdminNewsCreateRoute } from "./src/routes/admin/news.create.js";
 import { registerAdminNewsListRoute } from "./src/routes/admin/news.list.js";
 import { registerAdminNewsPublishRoute } from "./src/routes/admin/news.publish.js";
+import { registerAdminNewsUpdateRoute } from "./src/routes/admin/news.update.js";
 loadEnv();
 
 let dbReady = false;
@@ -74,7 +75,7 @@ registerAdminNewsCreateRoute(app, {
 });
 registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
 registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady });
-
+registerAdminNewsUpdateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
 
 app.post("/admin/seasons", async (req, res) => {
   if (!requireAdmin(req, res)) return;
