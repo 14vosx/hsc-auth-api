@@ -1,6 +1,7 @@
 import express from "express";
 import mysql from "mysql2/promise";
 import { buildCors } from "./src/config/cors.js";
+import { buildDbConfig } from "./src/config/db.js";
 import { createSeasonsRepo } from "./seasons.repo.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
@@ -91,17 +92,7 @@ app.use(corsMiddleware);
 // Preflight cobrindo tudo + mesmas opções
 app.options(preflightPattern, preflightMiddleware);
 
-const DB_HOST = process.env.DB_HOST || "127.0.0.1";
-const isLocalDb = DB_HOST === "127.0.0.1" || DB_HOST === "localhost";
-
-const dbConfig = {
-  host: DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  ...(isLocalDb ? {} : { ssl: { rejectUnauthorized: false } }),
-};
+const dbConfig = buildDbConfig();
 
 const seasonsRepo = createSeasonsRepo(dbConfig);
 
