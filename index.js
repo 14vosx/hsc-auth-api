@@ -86,14 +86,27 @@ function validateSeasonInput({ slug, name, start_at, end_at }) {
 }
 
 // IMPORTANTÍSSIMO: sem trailing slash
-const allowedOrigin =
-  (process.env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "") ||
-  "https://auth.haxixesmokeclub.com";
+const allowedOrigins = (() => {
+  const raw = (process.env.ALLOWED_ORIGINS || "").trim();
+  if (raw) {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => s.replace(/\/$/, ""));
+  }
+
+  const single = (process.env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "");
+  return [single || "https://auth.haxixesmokeclub.com"];
+})();
+
+const allowedOriginsSet = new Set(allowedOrigins);
 
 const corsOptions = {
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    cb(null, origin === allowedOrigin);
+    const clean = String(origin).trim().replace(/\/$/, "");
+    cb(null, allowedOriginsSet.has(clean));
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
