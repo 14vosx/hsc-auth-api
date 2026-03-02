@@ -26,6 +26,7 @@ import { registerAdminNewsListRoute } from "./src/routes/admin/news.list.js";
 import { registerAdminNewsPublishRoute } from "./src/routes/admin/news.publish.js";
 import { registerAdminNewsUpdateRoute } from "./src/routes/admin/news.update.js";
 import { registerAdminNewsUnpublishRoute } from "./src/routes/admin/news.unpublish.js";
+import { registerAdminNewsDeleteRoute } from "./src/routes/admin/news.delete.js";
 loadEnv();
 
 let dbReady = false;
@@ -78,6 +79,7 @@ registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
 registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady });
 registerAdminNewsUpdateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
 registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, getDbReady });
+registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady });
 
 app.post("/admin/seasons", async (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -179,35 +181,6 @@ app.post("/admin/seasons/:slug/close", async (req, res) => {
     return res.status(200).json({ ok: true, slug, status: "closed" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.delete("/admin/news/:id", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    return res.status(400).json({ ok: false, error: "invalid_id" });
-  }
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-
-    const [result] = await connection.execute(`DELETE FROM news WHERE id = ?`, [
-      id,
-    ]);
-
-    await connection.end();
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ ok: false, error: "not_found" });
-    }
-
-    return res.json({ ok: true, deleted: id });
-  } catch (_err) {
-    return res.status(500).json({ ok: false, error: "db_error" });
   }
 });
 
