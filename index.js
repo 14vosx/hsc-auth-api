@@ -19,6 +19,7 @@ import { ensureSchema } from "./src/db/schema.js";
 import { loadEnv } from "./src/config/env.js";
 import { registerHealthRoutes } from "./src/routes/health.js";
 import { registerContentNewsRoutes } from "./src/routes/content/news.js";
+import { registerContentSeasonsRoutes } from "./src/routes/content/seasons.js";
 loadEnv();
 
 let dbReady = false;
@@ -52,6 +53,7 @@ const seasonsRepo = createSeasonsRepo(dbConfig);
 
 registerHealthRoutes(app, { corsMeta, getDbStatus });
 registerContentNewsRoutes(app, { dbConfig, getDbReady });
+registerContentSeasonsRoutes(app, { seasonsRepo, sendPublic, getDbReady });
 
 app.get("/admin/schema", async (req, res) => {
   if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
@@ -485,18 +487,6 @@ app.delete("/admin/news/:id", async (req, res) => {
     return res.json({ ok: true, deleted: id });
   } catch (_err) {
     return res.status(500).json({ ok: false, error: "db_error" });
-  }
-});
-
-app.get("/content/seasons", async (_req, res) => {
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  try {
-    const rows = await seasonsRepo.listSeasons();
-    return sendPublic(res, rows);
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
