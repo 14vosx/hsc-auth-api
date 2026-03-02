@@ -25,6 +25,7 @@ import { registerAdminNewsCreateRoute } from "./src/routes/admin/news.create.js"
 import { registerAdminNewsListRoute } from "./src/routes/admin/news.list.js";
 import { registerAdminNewsPublishRoute } from "./src/routes/admin/news.publish.js";
 import { registerAdminNewsUpdateRoute } from "./src/routes/admin/news.update.js";
+import { registerAdminNewsUnpublishRoute } from "./src/routes/admin/news.unpublish.js";
 loadEnv();
 
 let dbReady = false;
@@ -76,6 +77,7 @@ registerAdminNewsCreateRoute(app, {
 registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
 registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady });
 registerAdminNewsUpdateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
+registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, getDbReady });
 
 app.post("/admin/seasons", async (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -177,54 +179,6 @@ app.post("/admin/seasons/:slug/close", async (req, res) => {
     return res.status(200).json({ ok: true, slug, status: "closed" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.post("/admin/news/:id/unpublish", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    return res.status(400).json({ ok: false, error: "invalid_id" });
-  }
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-
-    const [result] = await connection.execute(
-      `
-      UPDATE news
-      SET status = 'draft',
-          published_at = NULL
-      WHERE id = ? AND status = 'published'
-      `,
-      [id],
-    );
-
-    if (result.affectedRows === 0) {
-      await connection.end();
-      return res
-        .status(404)
-        .json({ ok: false, error: "not_found_or_not_published" });
-    }
-
-    const [rows] = await connection.execute(
-      `
-      SELECT id, slug, title, excerpt, image_url, status, published_at, created_at, updated_at
-      FROM news
-      WHERE id = ?
-      LIMIT 1
-      `,
-      [id],
-    );
-
-    await connection.end();
-
-    return res.json({ ok: true, item: rows[0] });
-  } catch (_err) {
-    return res.status(500).json({ ok: false, error: "db_error" });
   }
 });
 
