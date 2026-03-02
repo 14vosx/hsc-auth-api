@@ -53,7 +53,14 @@ const seasonsRepo = createSeasonsRepo(dbConfig);
 
 registerHealthRoutes(app, { corsMeta, getDbStatus });
 registerContentNewsRoutes(app, { dbConfig, getDbReady });
-registerContentSeasonsRoutes(app, { seasonsRepo, sendPublic, getDbReady });
+registerContentSeasonsRoutes(app, {
+  seasonsRepo,
+  sendPublic,
+  sendBadRequest,
+  sendNotFound,
+  normalizeSlug,
+  getDbReady,
+});
 
 app.get("/admin/schema", async (req, res) => {
   if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
@@ -487,34 +494,6 @@ app.delete("/admin/news/:id", async (req, res) => {
     return res.json({ ok: true, deleted: id });
   } catch (_err) {
     return res.status(500).json({ ok: false, error: "db_error" });
-  }
-});
-
-app.get("/content/seasons/active", async (_req, res) => {
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  try {
-    const row = await seasonsRepo.getActiveSeason();
-    return sendPublic(res, row ?? null);
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.get("/content/seasons/:slug", async (req, res) => {
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  const slug = normalizeSlug(req.params.slug);
-  if (!slug) return sendBadRequest(res, "invalid_slug");
-
-  try {
-    const row = await seasonsRepo.getSeasonBySlug(slug);
-    if (!row) return sendNotFound(res, "season_not_found");
-    return sendPublic(res, row);
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
