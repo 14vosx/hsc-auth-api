@@ -14,21 +14,10 @@ import {
   sendNotFound,
   sendConflict,
 } from "./src/utils/http.js";
+import { registerAllRoutes } from "./src/routes/register.js";
 import { normalizeSlug } from "./src/utils/slug.js";
 import { bootstrapDb } from "./src/db/bootstrap.js";
 import { loadEnv } from "./src/config/env.js";
-import { registerHealthRoutes } from "./src/routes/health.js";
-import { registerContentNewsRoutes } from "./src/routes/content/news.js";
-import { registerContentSeasonsRoutes } from "./src/routes/content/seasons.js";
-import { registerAdminSchemaRoute } from "./src/routes/admin/schema.js";
-import { registerAdminNewsCreateRoute } from "./src/routes/admin/news.create.js";
-import { registerAdminNewsListRoute } from "./src/routes/admin/news.list.js";
-import { registerAdminNewsPublishRoute } from "./src/routes/admin/news.publish.js";
-import { registerAdminNewsUpdateRoute } from "./src/routes/admin/news.update.js";
-import { registerAdminNewsUnpublishRoute } from "./src/routes/admin/news.unpublish.js";
-import { registerAdminNewsDeleteRoute } from "./src/routes/admin/news.delete.js";
-import { registerAdminSeasonsWriteRoutes } from "./src/routes/admin/seasons.write.js";
-import { registerAdminSeasonsActionRoutes } from "./src/routes/admin/seasons.actions.js";
 
 loadEnv();
 
@@ -61,47 +50,24 @@ const dbConfig = buildDbConfig();
 
 const seasonsRepo = createSeasonsRepo(dbConfig);
 
-registerHealthRoutes(app, { corsMeta, getDbStatus });
-registerContentNewsRoutes(app, { dbConfig, getDbReady });
-registerContentSeasonsRoutes(app, {
+registerAllRoutes(app, {
+  corsMeta,
+  getDbStatus,
+  getDbReady,
+
+  dbConfig,
   seasonsRepo,
+  requireAdmin,
+  adminKey: ADMIN_KEY,
+
   sendPublic,
   sendBadRequest,
   sendNotFound,
+  sendConflict,
   normalizeSlug,
-  getDbReady,
-});
-registerAdminSchemaRoute(app, { adminKey: ADMIN_KEY, dbConfig, getDbReady });
-registerAdminNewsCreateRoute(app, {
-  requireAdmin,
-  dbConfig,
-  getDbReady,
-  normalizeSlug,
-});
-registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
-registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady });
-registerAdminNewsUpdateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
-registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, getDbReady });
-registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady });
-registerAdminSeasonsWriteRoutes(app, {
-  requireAdmin,
-  getDbReady,
-  seasonsRepo,
-  normalizeSlug,
+
   validateSeasonInput,
   validateSeasonPatch,
-  sendBadRequest,
-  sendNotFound,
-  sendConflict,
-});
-registerAdminSeasonsActionRoutes(app, {
-  requireAdmin,
-  getDbReady,
-  seasonsRepo,
-  normalizeSlug,
-  sendBadRequest,
-  sendNotFound,
-  sendConflict,
 });
 
 bootstrapDb({
