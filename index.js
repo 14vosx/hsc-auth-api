@@ -20,6 +20,7 @@ import { loadEnv } from "./src/config/env.js";
 import { registerHealthRoutes } from "./src/routes/health.js";
 import { registerContentNewsRoutes } from "./src/routes/content/news.js";
 import { registerContentSeasonsRoutes } from "./src/routes/content/seasons.js";
+import { registerAdminSchemaRoute } from "./src/routes/admin/schema.js";
 loadEnv();
 
 let dbReady = false;
@@ -61,41 +62,7 @@ registerContentSeasonsRoutes(app, {
   normalizeSlug,
   getDbReady,
 });
-
-app.get("/admin/schema", async (req, res) => {
-  if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
-
-  if (!dbReady)
-    return res.status(503).json({ ok: false, error: "db_not_ready" });
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-
-    const [versionRows] = await connection.execute(
-      `SELECT version FROM schema_meta LIMIT 1`,
-    );
-    const [tables] = await connection.execute(
-      `
-      SELECT TABLE_NAME
-      FROM information_schema.tables
-      WHERE table_schema = ?
-      `,
-      [process.env.DB_NAME],
-    );
-
-    await connection.end();
-
-    res.json({
-      ok: true,
-      version: versionRows[0]?.version ?? null,
-      tables: tables.map((t) => t.TABLE_NAME),
-    });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
+registerAdminSchemaRoute(app, { adminKey: ADMIN_KEY, dbConfig, getDbReady });
 
 app.post("/admin/news", async (req, res) => {
   if (!requireAdmin(req, res)) return;
