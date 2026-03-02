@@ -14,6 +14,7 @@ import {
   sendConflict,
 } from "./src/utils/http.js";
 import { normalizeSlug } from "./src/utils/slug.js";
+import { bootstrapDb } from "./src/db/bootstrap.js";
 import { ensureSchema } from "./src/db/schema.js";
 import { loadEnv } from "./src/config/env.js";
 import { registerHealthRoutes } from "./src/routes/health.js";
@@ -103,23 +104,17 @@ registerAdminSeasonsActionRoutes(app, {
   sendConflict,
 });
 
-if (process.env.DB_HOST) {
-  ensureSchema(dbConfig)
-    .then(async () => {
-      // sanity check: ensure repo can query seasons
-      await seasonsRepo.getActiveSeason();
-
-      dbReady = true;
-      console.log("Database schema ensured (v4).");
-    })
-    .catch((err) => {
-      dbReady = false;
-      dbError = err?.message || String(err);
-      console.error("Schema bootstrap failed:", err);
-    });
-} else {
-  console.warn("DB not configured. Skipping schema bootstrap.");
-}
+bootstrapDb({
+  dbConfig,
+  seasonsRepo,
+  onReady: () => {
+    dbReady = true;
+  },
+  onError: (err) => {
+    dbReady = false;
+    dbError = err?.message || String(err);
+  },
+});
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`[hsc-auth] listening on http://0.0.0.0:${port}`);
