@@ -3,6 +3,7 @@ import mysql from "mysql2/promise";
 import { buildCors } from "./src/config/cors.js";
 import { buildDbConfig } from "./src/config/db.js";
 import { createSeasonsRepo } from "./seasons.repo.js";
+import { createRequireAdmin } from "./src/middlewares/adminKey.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
 
@@ -11,15 +12,9 @@ let dbError = null;
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const ADMIN_KEY = process.env.ADMIN_KEY;
 
-function requireAdmin(req, res) {
-  if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
-    res.status(401).json({ ok: false, error: "Unauthorized" });
-    return false;
-  }
-  return true;
-}
+const ADMIN_KEY = process.env.ADMIN_KEY;
+const requireAdmin = createRequireAdmin(ADMIN_KEY);
 
 function normalizeSlug(input) {
   return String(input || "")
