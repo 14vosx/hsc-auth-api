@@ -2,6 +2,7 @@ import express from "express";
 import { buildCors } from "./src/config/cors.js";
 import { buildDbConfig } from "./src/config/db.js";
 import { createSeasonsRepo } from "./seasons.repo.js";
+import { startServer } from "./src/server/start.js";
 import {
   validateSeasonInput,
   validateSeasonPatch,
@@ -116,6 +117,4 @@ bootstrapDb({
   },
 });
 
-app.listen(port, "0.0.0.0", () => {
-  console.log(`[hsc-auth] listening on http://0.0.0.0:${port}`);
-});
+startServer(app, port);
