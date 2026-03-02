@@ -276,7 +276,7 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "hsc-auth-api",
     ts: new Date().toISOString(),
-    cors: { allowedOrigin },
+    cors: { allowedOrigin: allowedOrigins[0], allowedOrigins },
     db: { ready: dbReady, error: dbError ? "schema_bootstrap_failed" : null },
   });
 });
