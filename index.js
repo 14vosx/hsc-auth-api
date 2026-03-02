@@ -4,6 +4,12 @@ import { buildCors } from "./src/config/cors.js";
 import { buildDbConfig } from "./src/config/db.js";
 import { createSeasonsRepo } from "./seasons.repo.js";
 import { createRequireAdmin } from "./src/middlewares/adminKey.js";
+import {
+  sendPublic,
+  sendBadRequest,
+  sendNotFound,
+  sendConflict,
+} from "./src/utils/http.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
 
@@ -198,32 +204,6 @@ async function ensureSchema() {
   }
 
   await connection.end();
-}
-
-function sendPublic(res, data) {
-  return res.status(200).json({
-    ok: true,
-    generatedAt: new Date().toISOString(),
-    data,
-  });
-}
-
-function sendError(res, status, code, extra) {
-  const payload = { ok: false, error: code };
-  if (extra && typeof extra === "object") Object.assign(payload, extra);
-  return res.status(status).json(payload);
-}
-
-function sendBadRequest(res, code, extra) {
-  return sendError(res, 400, code || "bad_request", extra);
-}
-
-function sendNotFound(res, code, extra) {
-  return sendError(res, 404, code || "not_found", extra);
-}
-
-function sendConflict(res, code, extra) {
-  return sendError(res, 409, code || "conflict", extra);
 }
 
 app.get("/health", (_req, res) => {
