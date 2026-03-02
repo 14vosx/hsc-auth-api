@@ -12,3 +12,6 @@ logs/
 index.js.save
 index.js.bak.*
 .env.local
+
+# HSC: templates de env DEV podem ser versionados
+!.env.local.example
