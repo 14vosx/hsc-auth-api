@@ -3,7 +3,7 @@ import cors from "cors";
 import mysql from "mysql2/promise";
 import { createSeasonsRepo } from "./seasons.repo.js";
 import dotenv from "dotenv";
-dotenv.config({ path: process.env.ENV_FILE || ".env.local" });
+dotenv.config({ path: process.env.ENV_FILE || ".env" });
 
 let dbReady = false;
 let dbError = null;
