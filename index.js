@@ -16,7 +16,6 @@ import {
 } from "./src/utils/http.js";
 import { normalizeSlug } from "./src/utils/slug.js";
 import { bootstrapDb } from "./src/db/bootstrap.js";
-import { ensureSchema } from "./src/db/schema.js";
 import { loadEnv } from "./src/config/env.js";
 import { registerHealthRoutes } from "./src/routes/health.js";
 import { registerContentNewsRoutes } from "./src/routes/content/news.js";
