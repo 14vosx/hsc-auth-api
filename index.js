@@ -1,6 +1,6 @@
 import express from "express";
-import cors from "cors";
 import mysql from "mysql2/promise";
+import { buildCors } from "./src/config/cors.js";
 import { createSeasonsRepo } from "./seasons.repo.js";
 import { loadEnv } from "./src/config/env.js";
 loadEnv();
@@ -85,34 +85,11 @@ function validateSeasonInput({ slug, name, start_at, end_at }) {
   };
 }
 
-// IMPORTANTÍSSIMO: sem trailing slash
-const allowedOrigins = (() => {
-  const raw = (process.env.ALLOWED_ORIGINS || "").trim();
-  if (raw) {
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => s.replace(/\/$/, ""));
-  }
+const { corsMiddleware, preflightMiddleware, preflightPattern, corsMeta } = buildCors();
 
-  const single = (process.env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "");
-  return [single || "https://auth.haxixesmokeclub.com"];
-})();
-
-const allowedOriginsSet = new Set(allowedOrigins);
-
-const corsOptions = {
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    const clean = String(origin).trim().replace(/\/$/, "");
-    cb(null, allowedOriginsSet.has(clean));
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false,
-  maxAge: 86400,
-};
+app.use(corsMiddleware);
+// Preflight cobrindo tudo + mesmas opções
+app.options(preflightPattern, preflightMiddleware);
 
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const isLocalDb = DB_HOST === "127.0.0.1" || DB_HOST === "localhost";
@@ -127,14 +104,6 @@ const dbConfig = {
 };
 
 const seasonsRepo = createSeasonsRepo(dbConfig);
-
-app.use(cors(corsOptions));
-
-// Preflight cobrindo tudo + mesmas opções
-app.options(/.*/, cors(corsOptions));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
 async function ensureSchema() {
   const connection = await mysql.createConnection(dbConfig);
@@ -276,7 +245,7 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "hsc-auth-api",
     ts: new Date().toISOString(),
-    cors: { allowedOrigin: allowedOrigins[0], allowedOrigins },
+    cors: corsMeta,
     db: { ready: dbReady, error: dbError ? "schema_bootstrap_failed" : null },
   });
 });
