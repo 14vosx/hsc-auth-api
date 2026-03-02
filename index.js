@@ -18,13 +18,19 @@ import { normalizeSlug } from "./src/utils/slug.js";
 import { ensureSchema } from "./src/db/schema.js";
 import { loadEnv } from "./src/config/env.js";
 import { registerHealthRoutes } from "./src/routes/health.js";
+import { registerContentNewsRoutes } from "./src/routes/content/news.js";
 loadEnv();
 
 let dbReady = false;
+
 let dbError = null;
 
 function getDbStatus() {
   return { ready: dbReady, error: dbError ? "schema_bootstrap_failed" : null };
+}
+
+function getDbReady() {
+  return dbReady;
 }
 
 const app = express();
@@ -35,8 +41,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(corsMiddleware);
 app.options(preflightPattern, preflightMiddleware);
 
-registerHealthRoutes(app, { corsMeta, getDbStatus });
-
 const port = Number(process.env.PORT || 3000);
 
 const ADMIN_KEY = process.env.ADMIN_KEY;
@@ -46,6 +50,8 @@ const dbConfig = buildDbConfig();
 
 const seasonsRepo = createSeasonsRepo(dbConfig);
 
+registerHealthRoutes(app, { corsMeta, getDbStatus });
+registerContentNewsRoutes(app, { dbConfig, getDbReady });
 
 app.get("/admin/schema", async (req, res) => {
   if (!ADMIN_KEY || req.headers["x-admin-key"] !== ADMIN_KEY) {
