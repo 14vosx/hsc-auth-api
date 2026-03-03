@@ -4,12 +4,12 @@ import { ensureSchema } from "./schema.js";
 export function bootstrapDb({ dbConfig, seasonsRepo, onReady, onError }) {
   if (process.env.DB_HOST) {
     ensureSchema(dbConfig)
-      .then(async () => {
+      .then(async (schemaVersion) => {
         // sanity check: ensure repo can query seasons
         await seasonsRepo.getActiveSeason();
 
         onReady();
-        console.log("Database schema ensured (v5).");
+        console.log(`Database schema ensured (v${schemaVersion}).`);
       })
       .catch((err) => {
         onError(err);

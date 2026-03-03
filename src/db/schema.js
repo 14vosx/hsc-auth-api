@@ -257,5 +257,31 @@ export async function ensureSchema(dbConfig) {
     schemaVersion = 6;
   }
 
+
+  // v7: admin audit log (mutations on /admin/* must be audited)
+  if (schemaVersion < 7) {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        route VARCHAR(255) NOT NULL,
+        method VARCHAR(10) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        via ENUM('session','admin-key') NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+        CONSTRAINT fk_admin_audit_user FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE SET NULL,
+        KEY idx_admin_audit_created_at (created_at),
+        KEY idx_admin_audit_route (route),
+        KEY idx_admin_audit_user_id (user_id)
+      )
+    `);
+
+    await connection.execute(`UPDATE schema_meta SET version = 7 WHERE version < 7`);
+    schemaVersion = 7;
+  }
+
   await connection.end();
+  return schemaVersion;
 }
