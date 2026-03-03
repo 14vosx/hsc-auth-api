@@ -1,5 +1,6 @@
 // src/routes/admin/news.create.js
 import mysql from "mysql2/promise";
+import { auditAdminAction } from "../../services/adminAudit.js";
 
 export function registerAdminNewsCreateRoute(app, {
   requireAdmin,
@@ -26,6 +27,9 @@ export function registerAdminNewsCreateRoute(app, {
     if (!cleanSlug) {
       return res.status(400).json({ ok: false, error: "invalid_slug" });
     }
+
+      await auditAdminAction({ dbConfig, req, action: "news.create" });
+
 
     try {
       const connection = await mysql.createConnection(dbConfig);

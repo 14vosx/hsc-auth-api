@@ -71,6 +71,7 @@ export function registerAllRoutes(app, deps) {
 
   registerAdminSeasonsWriteRoutes(app, {
     requireAdmin,
+    dbConfig,
     getDbReady,
     seasonsRepo,
     normalizeSlug,
@@ -83,6 +84,7 @@ export function registerAllRoutes(app, deps) {
 
   registerAdminSeasonsActionRoutes(app, {
     requireAdmin,
+    dbConfig,
     getDbReady,
     seasonsRepo,
     normalizeSlug,

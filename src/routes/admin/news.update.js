@@ -1,5 +1,6 @@
 // src/routes/admin/news.update.js
 import mysql from "mysql2/promise";
+import { auditAdminAction } from "../../services/adminAudit.js";
 
 export function registerAdminNewsUpdateRoute(app, {
   requireAdmin,
@@ -54,6 +55,9 @@ export function registerAdminNewsUpdateRoute(app, {
     if (!updates.length) {
       return res.status(400).json({ ok: false, error: "no_fields_to_update" });
     }
+
+    await auditAdminAction({ dbConfig, req, action: "news.update" });
+
 
     try {
       const connection = await mysql.createConnection(dbConfig);

@@ -1,5 +1,6 @@
 // src/routes/admin/news.publish.js
 import mysql from "mysql2/promise";
+import { auditAdminAction } from "../../services/adminAudit.js"
 
 export function registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady }) {
   app.post("/admin/news/:id/publish", async (req, res) => {
@@ -11,6 +12,8 @@ export function registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, get
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
+
+    await auditAdminAction({ dbConfig, req, action: "news.publish" });
 
     try {
       const connection = await mysql.createConnection(dbConfig);

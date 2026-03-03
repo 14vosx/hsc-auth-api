@@ -1,7 +1,9 @@
 // src/routes/admin/seasons.actions.js
+import { auditAdminAction } from "../../services/adminAudit.js";
 
 export function registerAdminSeasonsActionRoutes(app, {
   requireAdmin,
+  dbConfig,
   getDbReady,
   seasonsRepo,
   normalizeSlug,
@@ -19,6 +21,8 @@ export function registerAdminSeasonsActionRoutes(app, {
     if (!slug) return sendBadRequest(res, "invalid_slug");
 
     const result = await seasonsRepo.activateSeasonTx(slug);
+    
+    await auditAdminAction({ dbConfig, req, action: "season.activate" });
 
     if (!result.ok) {
       if (result.error === "season_not_found")
@@ -39,6 +43,8 @@ export function registerAdminSeasonsActionRoutes(app, {
 
     const slug = normalizeSlug(req.params.slug);
     if (!slug) return sendBadRequest(res, "invalid_slug");
+
+    await auditAdminAction({ dbConfig, req, action: "season.close" });
 
     try {
       const current = await seasonsRepo.getSeasonBySlug(slug);

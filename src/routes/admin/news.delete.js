@@ -1,5 +1,6 @@
 // src/routes/admin/news.delete.js
 import mysql from "mysql2/promise";
+import { auditAdminAction } from "../../services/adminAudit.js"
 
 export function registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady }) {
   app.delete("/admin/news/:id", async (req, res) => {
@@ -11,6 +12,8 @@ export function registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getD
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
+
+    await auditAdminAction({ dbConfig, req, action: "news.delete" });
 
     try {
       const connection = await mysql.createConnection(dbConfig);

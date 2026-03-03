@@ -1,7 +1,9 @@
 // src/routes/admin/seasons.write.js
+import { auditAdminAction } from "../../services/adminAudit.js";
 
 export function registerAdminSeasonsWriteRoutes(app, {
   requireAdmin,
+  dbConfig,
   getDbReady,
   seasonsRepo,
   normalizeSlug,
@@ -27,6 +29,8 @@ export function registerAdminSeasonsWriteRoutes(app, {
         v.field ? { field: v.field } : undefined,
       );
     }
+
+    await auditAdminAction({ dbConfig, req, action: "season.create" });
 
     try {
       const id = await seasonsRepo.insertSeason({
@@ -60,6 +64,8 @@ export function registerAdminSeasonsWriteRoutes(app, {
 
     const slug = normalizeSlug(req.params.slug);
     if (!slug) return sendBadRequest(res, "invalid_slug");
+
+    await auditAdminAction({ dbConfig, req, action: "season.update" });
 
     try {
       const current = await seasonsRepo.getSeasonBySlug(slug);
