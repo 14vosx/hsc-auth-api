@@ -3,7 +3,7 @@ import mysql from "mysql2/promise";
 
 export function registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady }) {
   app.delete("/admin/news/:id", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 

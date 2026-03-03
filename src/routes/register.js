@@ -60,7 +60,7 @@ export function registerAllRoutes(app, deps) {
   registerAuthMeRoute(app, { dbConfig, getDbReady });
   registerAuthLogoutRoute(app, { dbConfig, getDbReady });
   
-  registerAdminSchemaRoute(app, { adminKey, dbConfig, getDbReady });
+  registerAdminSchemaRoute(app, { requireAdmin, dbConfig, getDbReady });
 
   registerAdminNewsCreateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
   registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });

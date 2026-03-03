@@ -11,7 +11,7 @@ export function registerAdminSeasonsActionRoutes(app, {
 }) {
   // POST /admin/seasons/:slug/activate
   app.post("/admin/seasons/:slug/activate", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -33,7 +33,7 @@ export function registerAdminSeasonsActionRoutes(app, {
 
   // POST /admin/seasons/:slug/close
   app.post("/admin/seasons/:slug/close", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 

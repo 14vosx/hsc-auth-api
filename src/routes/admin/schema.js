@@ -1,11 +1,10 @@
 // src/routes/admin/schema.js
 import mysql from "mysql2/promise";
 
-export function registerAdminSchemaRoute(app, { adminKey, dbConfig, getDbReady }) {
+export function registerAdminSchemaRoute(app, { requireAdmin, dbConfig, getDbReady }) {
   app.get("/admin/schema", async (req, res) => {
-    if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
-      return res.status(401).json({ ok: false, error: "Unauthorized" });
-    }
+    if (!(await requireAdmin(req, res))) return;
+
 
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
