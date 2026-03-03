@@ -217,5 +217,45 @@ export async function ensureSchema(dbConfig) {
     schemaVersion = 5;
   }
 
+
+  // v6: auth tables (magic links + sessions)
+  if (schemaVersion < 6) {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS magic_links (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token_hash CHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+        CONSTRAINT fk_magic_links_user FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE,
+        UNIQUE KEY uniq_magic_links_token_hash (token_hash),
+        KEY idx_magic_links_expires_at (expires_at),
+        KEY idx_magic_links_user_id (user_id)
+      )
+    `);
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id CHAR(36) PRIMARY KEY,
+        user_id INT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+        ip_address VARCHAR(64),
+        user_agent VARCHAR(255),
+        CONSTRAINT fk_sessions_user FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE,
+        KEY idx_sessions_user_id (user_id),
+        KEY idx_sessions_expires_at (expires_at)
+      )
+    `);
+
+    await connection.execute(`UPDATE schema_meta SET version = 6 WHERE version < 6`);
+    schemaVersion = 6;
+  }
+
   await connection.end();
 }
