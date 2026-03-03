@@ -5,6 +5,7 @@ import { registerContentSeasonsRoutes } from "./content/seasons.js";
 
 import { registerAuthVerifyRoute } from "./auth/verify.js"
 import { registerAuthRequestLinkRoute } from "./auth/request-link.js";
+import { registerAuthMeRoute } from "./auth/me.js"
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
 
@@ -55,7 +56,8 @@ export function registerAllRoutes(app, deps) {
 
   registerAuthVerifyRoute(app, { dbConfig, getDbReady });
   registerAuthRequestLinkRoute(app, { dbConfig, getDbReady });
-
+  registerAuthMeRoute(app, { dbConfig, getDbReady });
+  
   registerAdminSchemaRoute(app, { adminKey, dbConfig, getDbReady });
 
   registerAdminNewsCreateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
