@@ -4,6 +4,29 @@ import mysql from "mysql2/promise";
 export async function ensureSchema(dbConfig) {
   const connection = await mysql.createConnection(dbConfig);
 
+  const dbName = dbConfig?.database || process.env.DB_NAME;
+
+  async function hasColumn(table, column) {
+    const [r] = await connection.execute(
+      `SELECT COUNT(*) AS cnt
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [dbName, table, column],
+    );
+    return (r[0]?.cnt ?? 0) > 0;
+  }
+
+  async function hasIndex(table, indexName) {
+    const [r] = await connection.execute(
+      `SELECT COUNT(*) AS cnt
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+      [dbName, table, indexName],
+    );
+    return (r[0]?.cnt ?? 0) > 0;
+  }
+
+
   // schema_meta
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS schema_meta (
@@ -105,6 +128,93 @@ export async function ensureSchema(dbConfig) {
       `UPDATE schema_meta SET version = 4 WHERE version < 4`,
     );
     schemaVersion = 4;
+  }
+
+
+  // v5: expand users for auth/account (roles, status, steamid64, profile fields)
+  if (schemaVersion < 5) {
+  // enforce required identity fields (fail fast if existing data is invalid)
+    const [[badEmail]] = await connection.execute(
+      `SELECT COUNT(*) AS cnt FROM users WHERE email IS NULL OR email = ''`,
+    );
+    if ((badEmail?.cnt ?? 0) > 0) {
+      throw new Error("schema v5: users.email has NULL/empty; cannot enforce NOT NULL");
+    }
+
+    const [[badName]] = await connection.execute(
+      `SELECT COUNT(*) AS cnt FROM users WHERE display_name IS NULL OR display_name = ''`,
+    );
+    if ((badName?.cnt ?? 0) > 0) {
+      throw new Error("schema v5: users.display_name has NULL/empty; cannot enforce NOT NULL");
+    }
+
+    await connection.execute(`ALTER TABLE users MODIFY email VARCHAR(255) NOT NULL`);
+    await connection.execute(`ALTER TABLE users MODIFY display_name VARCHAR(255) NOT NULL`);
+
+    // Columns (idempotent: check existence in information_schema)
+    if (!(await hasColumn("users", "steamid64"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN steamid64 VARCHAR(32) NULL`,
+      );
+    }
+
+    if (!(await hasColumn("users", "role"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN role ENUM('user','editor','admin') NOT NULL DEFAULT 'user'`,
+      );
+    }
+
+    if (!(await hasColumn("users", "premium"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN premium BOOLEAN NOT NULL DEFAULT FALSE`,
+      );
+    }
+
+    if (!(await hasColumn("users", "bio"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN bio TEXT NULL`,
+      );
+    }
+
+    if (!(await hasColumn("users", "favorite_map"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN favorite_map VARCHAR(64) NULL`,
+      );
+    }
+
+    if (!(await hasColumn("users", "favorite_weapon"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN favorite_weapon VARCHAR(64) NULL`,
+      );
+    }
+
+    if (!(await hasColumn("users", "game_role"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN game_role VARCHAR(64) NULL`,
+      );
+    }
+
+    if (!(await hasColumn("users", "timezone"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN timezone VARCHAR(64) NOT NULL DEFAULT 'UTC'`,
+      );
+    }
+
+    if (!(await hasColumn("users", "status"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD COLUMN status ENUM('active','blocked') NOT NULL DEFAULT 'active'`,
+      );
+    }
+
+    // Constraints / indexes
+    if (!(await hasIndex("users", "uniq_users_steamid64"))) {
+      await connection.execute(
+        `ALTER TABLE users ADD UNIQUE KEY uniq_users_steamid64 (steamid64)`,
+      );
+    }
+
+    await connection.execute(`UPDATE schema_meta SET version = 5 WHERE version < 5`);
+    schemaVersion = 5;
   }
 
   await connection.end();

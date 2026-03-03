@@ -9,7 +9,7 @@ export function bootstrapDb({ dbConfig, seasonsRepo, onReady, onError }) {
         await seasonsRepo.getActiveSeason();
 
         onReady();
-        console.log("Database schema ensured (v4).");
+        console.log("Database schema ensured (v5).");
       })
       .catch((err) => {
         onError(err);
