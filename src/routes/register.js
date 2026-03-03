@@ -3,6 +3,7 @@ import { registerHealthRoutes } from "./health.js";
 import { registerContentNewsRoutes } from "./content/news.js";
 import { registerContentSeasonsRoutes } from "./content/seasons.js";
 
+import { registerAuthVerifyRoute } from "./auth/verify.js"
 import { registerAuthRequestLinkRoute } from "./auth/request-link.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
@@ -52,6 +53,7 @@ export function registerAllRoutes(app, deps) {
     getDbReady,
   });
 
+  registerAuthVerifyRoute(app, { dbConfig, getDbReady });
   registerAuthRequestLinkRoute(app, { dbConfig, getDbReady });
 
   registerAdminSchemaRoute(app, { adminKey, dbConfig, getDbReady });
