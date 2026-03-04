@@ -15,3 +15,6 @@ index.js.bak.*
 
 # HSC: templates de env DEV podem ser versionados
 !.env.local.example
+# HSC ops/db local backups (não versionar)
+ops/db/*.broken.*
+ops/db/*.pre-stable.*
