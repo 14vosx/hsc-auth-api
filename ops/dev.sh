@@ -56,4 +56,11 @@ echo "➡️  Instalando dependências Node (npm ci)..."
 npm ci
 
 echo "➡️  Iniciando API (ENV_FILE=$ENV_FILE)..."
-ENV_FILE="$ENV_FILE" npm start
+
+# carrega variáveis no ambiente atual
+set -a
+. "$ENV_FILE"
+set +a
+
+# sobe a API com env já carregado
+node index.js
