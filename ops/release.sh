@@ -38,18 +38,32 @@ if [[ ! -d .git ]]; then
   exit 1
 fi
 
-# Exigir working tree limpa
-DIRTY_COUNT="$(git status --porcelain | wc -l | tr -d ' ')"
-if [[ "$DIRTY_COUNT" != "0" ]]; then
-  echo "❌ Working tree não está limpa ($DIRTY_COUNT mudança(s))."
-  echo "➡️  Faça commit/stash antes de criar TAG."
+# (novo) garantir branch main
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "main" ]]; then
+  echo "❌ Release só pode ser gerada a partir do branch 'main' (atual: $BRANCH)"
+  exit 1
+fi
+
+# (novo) garantir workspace limpo
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "❌ Working tree suja. Commit/stash antes de gerar release."
   git status --porcelain
   exit 1
 fi
 
-# Validar que tag não existe
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "❌ TAG já existe: $TAG"
+# (novo) garantir main sincronizado com origin
+git fetch origin main --tags
+LOCAL_SHA="$(git rev-parse HEAD)"
+REMOTE_SHA="$(git rev-parse origin/main)"
+if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
+  echo "❌ Seu main local não está igual ao origin/main. Rode: git pull --ff-only"
+  exit 1
+fi
+
+# (novo) impedir tag duplicada
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+  echo "❌ Tag já existe: $TAG"
   exit 1
 fi
 
