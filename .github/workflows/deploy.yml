@@ -4,11 +4,10 @@ on:
   push:
     tags:
       - "v*"
-      - "release-*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag para deploy (ex: v0.1.4 ou release-YYYYMMDD-HHMMSS)"
+        description: "Tag para deploy (ex: v0.3.3)"
         required: false
         type: string
       rollback:
@@ -17,11 +16,77 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: lightsail-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve target TAG
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            if [[ "${{ inputs.rollback }}" == "true" ]]; then
+              echo "mode=rollback" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            TAG="${{ inputs.tag }}"
+            if [[ -z "${TAG:-}" ]]; then
+              echo "❌ workflow_dispatch requer inputs.tag OU inputs.rollback=true"
+              exit 1
+            fi
+          fi
+
+          # hard guard: só aceitar v*
+          if [[ "$TAG" != v* ]]; then
+            echo "❌ Tag inválida para deploy automatizado: '$TAG' (esperado prefixo 'v')"
+            exit 1
+          fi
+
+          echo "mode=deploy" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Validate TAG is from main history
+        if: steps.target.outputs.mode == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.target.outputs.tag }}"
+
+          # garante que temos origin/main e tags
+          git fetch origin main --tags --prune
+
+          TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
+          MAIN_COMMIT="$(git rev-parse origin/main)"
+
+          echo "TAG: $TAG"
+          echo "TAG_COMMIT:  $TAG_COMMIT"
+          echo "MAIN_COMMIT: $MAIN_COMMIT"
+
+          # aceita tag que esteja no histórico do main (inclui tags antigas)
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "$MAIN_COMMIT"; then
+            echo "❌ Segurança: a tag '$TAG' não pertence ao histórico de origin/main. Deploy bloqueado."
+            exit 1
+          fi
+
       - name: SSH Deploy to Lightsail
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -29,18 +94,13 @@ jobs:
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
-            set -e
-            if [ "${{ github.event_name }}" = "push" ]; then
-              TAG="${{ github.ref_name }}"
-              sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh "$TAG"
-            else
-              if [ "${{ inputs.rollback }}" = "true" ]; then
-                sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh --rollback
-              else
-                if [ -z "${{ inputs.tag }}" ]; then
-                  echo "❌ workflow_dispatch requer inputs.tag OU inputs.rollback=true"
-                  exit 1
-                fi
-                sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh "${{ inputs.tag }}"
-              fi
+            set -euo pipefail
+
+            if [[ "${{ steps.target.outputs.mode }}" == "rollback" ]]; then
+              sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh --rollback
+              exit 0
             fi
+
+            TAG="${{ steps.target.outputs.tag }}"
+            echo "➡️  Deploying TAG: $TAG"
+            sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh "$TAG"
