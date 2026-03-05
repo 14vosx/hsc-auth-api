@@ -1,4 +1,3 @@
-**kit de scripts em `hsc-auth-api/ops/`**
 - **Manual operacional**:
 
 1. **Por que cada script existe (o ganho)**
@@ -21,9 +20,26 @@ Você está migrando de **“implementar direto em produção via SSH”** para 
 Isso te dá:
 
 * Reprodutibilidade (qualquer dev roda igual)
-* Controle de versões (tag = release)
+* Controle de versões (**tag = release**)
 * Rollback real (voltar a tag anterior)
 * Menos “loucura” no SSH
+
+---
+
+## 0.1) Estratégia oficial de branches (Git)
+
+Este projeto usa **deploy determinístico por TAG**. Em produção, o servidor faz `git fetch --tags` e faz checkout **da TAG** (detached HEAD). Portanto:
+
+- **TAG (`vX.Y.Z`)** = *artefato de produção* (o que realmente roda no servidor)
+- **main** = *espelho da produção* (sempre tagueável / deployável)
+- **develop** = *integração do próximo release* (contém `main` + features já aceitas)
+- **feature/*** = desenvolvimento do dia-a-dia (nasce de `develop`, volta para `develop`)
+- **fix/*** = hotfix de produção (nasce de `main`, volta para `main`)
+
+### Regras (obrigatórias)
+- **Não commitar direto em `main` nem em `develop`** (somente via PR).
+- **TAG só é gerada a partir do `main`** (`ops/release.sh` valida branch, árvore limpa e sync com `origin/main`).
+- Todo hotfix aplicado em `main` deve ser **sincronizado de volta** para `develop`.
 
 ---
 
@@ -33,20 +49,20 @@ Isso te dá:
 
 * **`ops/dev.sh`** → sobe **MariaDB via Docker** e roda a **API persistente** (fica rodando até Ctrl+C).
 * **`ops/deploy-local.sh`** → faz um “deploy local rápido” (instala deps, sobe DB, sobe API, roda smoke, e **encerra** no final).
-* **`ops/smoke-local.sh`** → valida endpoints (health + content + admin/schema se tiver ADMIN_KEY).
+* **`ops/smoke-local.sh`** → valida endpoints (health + content + admin/schema se tiver `ADMIN_KEY`).
 * **`ops/status.sh`** → imprime diagnóstico (node/npm/git/docker + health).
 * **`ops/stop.sh`** → derruba docker-compose local (e opcionalmente apaga volumes/imagens).
 
 ## Produção (AWS Lightsail / `/opt/hsc/hsc-auth-api`)
 
-* **`ops/release.sh`** → roda **somente no local**: exige tag `vX.Y.Z`, roda smoke local e faz push da tag.
+* **`ops/release.sh`** → roda **somente no local**: exige tag `vX.Y.Z`, exige **branch `main`**, exige **working tree limpa**, exige **sync com `origin/main`**, roda smoke local e faz push da tag.
 * **`ops/deploy-auth.sh`** → roda **somente no servidor**: checkout da tag, `npm ci`, restart systemd, smoke endpoints, grava log, lock anti-concorrência, rollback.
 
 ---
 
 # 2) Fluxo LOCAL (o que você faz no dia-a-dia)
 
-> **Objetivo**: você codifica local, roda MariaDB em Docker, valida, e só depois “solta tag”.
+> **Objetivo**: você codifica local, roda MariaDB em Docker, valida, integra em `develop` via PR, e só depois “promove para `main` e solta tag”.
 
 ## 2.1 Pré-requisitos locais (uma vez só)
 
@@ -79,7 +95,35 @@ ADMIN_KEY=dev-admin-key
 
 ---
 
-## 2.3 Rodar a API local (modo DEV persistente)
+## 2.3 Fluxo GIT diário (feature branch)
+
+### Começar uma feature (sempre a partir de `develop`)
+
+```sh
+cd ~/work/hsc/hsc-auth-api
+git checkout develop
+git pull --ff-only
+git checkout -b feature/<nome-curto>
+```
+
+
+### Iterar (código + testes)
+
+Rode a API local e teste o quanto precisar (ver seções abaixo).
+Depois commite normalmente na `feature/<nome-curto>`.
+
+### Finalizar feature
+
+Abra PR:
+```sh
+* **base:** `develop`
+* **compare:** `feature/<nome-curto>`
+```
+Após aprovação: merge no `develop`.
+
+---
+
+## 2.4 Rodar a API local (modo DEV persistente)
 
 Use quando você quer **programar e testar várias vezes**:
 
@@ -105,7 +149,7 @@ curl -fsS http://127.0.0.1:3000/health | cat
 
 ---
 
-## 2.4 Smoke test local (a qualquer momento)
+## 2.5 Smoke test local (a qualquer momento)
 
 ```bash
 cd ~/work/hsc/hsc-auth-api
@@ -122,7 +166,7 @@ Valida:
 
 ---
 
-## 2.5 “Deploy local rápido” (roda tudo e encerra)
+## 2.6 “Deploy local rápido” (roda tudo e encerra)
 
 Esse é ótimo pra “check final”:
 
@@ -142,7 +186,7 @@ O que ele faz:
 
 ---
 
-## 2.6 Parar tudo local
+## 2.7 Parar tudo local
 
 Parar containers (mantém dados):
 
@@ -164,7 +208,7 @@ Parar e apagar imagens (raramente necessário):
 
 ---
 
-## 2.7 Diagnóstico local (quando algo “parece estranho”)
+## 2.8 Diagnóstico local (quando algo “parece estranho”)
 
 ```bash
 ./ops/status.sh
@@ -174,12 +218,30 @@ Parar e apagar imagens (raramente necessário):
 
 # 3) Fluxo de PUBLICAÇÃO (release local → deploy prod)
 
-## 3.1 Release (sempre no LOCAL)
+## 3.0 Release PR (promover `develop` → `main`)
+
+> Antes de criar TAG, você promove o que está pronto no `develop` para o `main`.
+
+Passos:
+
+1. Abra PR:
+
+* **base:** `main`
+* **compare:** `develop`
+
+2. Faça merge do PR no `main`.
+
+---
+
+## 3.1 Release (sempre no LOCAL, sempre no `main`)
 
 > O release cria uma tag versionada e garante que **o estado que você vai publicar passa smoke local**.
+> **Regra:** TAG só sai do `main` e com `origin/main` sincronizado.
 
 ```bash
 cd ~/work/hsc/hsc-auth-api
+git checkout main
+git pull --ff-only
 ./ops/release.sh v0.1.12
 ```
 
@@ -187,8 +249,11 @@ O que ele faz (ganho real):
 
 * valida que é repo git
 * impede rodar em produção (guardrail)
+* exige branch `main`
+* exige working tree limpa
+* exige `main` sincronizado com `origin/main`
 * roda `smoke-local.sh` (bloqueia release se falhar)
-* cria tag `v0.1.12`
+* cria tag **anotada** `v0.1.12`
 * push da tag
 
 **Resultado**: agora existe uma “versão oficial” que o servidor pode buscar.
@@ -199,7 +264,7 @@ O que ele faz (ganho real):
 
 > Você roda isso logado no servidor Lightsail.
 
-**Importante**: você já viu que o deploy deve rodar como `hscadmin`, não como root, para evitar “dubious ownership” do git.
+**Importante**: o deploy deve rodar como `hscadmin`, não como root, para evitar “dubious ownership” do git.
 
 ### Deploy normal para uma tag
 
@@ -227,11 +292,50 @@ O que ele faz (e por que isso é ouro):
 
 ---
 
-# 4) “Pegadinhas” reais que você já encontrou (e como lidar)
+## 3.3 Hotfix (produção quebrada)
+
+> Use quando precisa corrigir produção sem esperar o próximo ciclo de release.
+
+1. Criar branch de fix a partir do `main`:
+
+```bash
+cd ~/work/hsc/hsc-auth-api
+git checkout main
+git pull --ff-only
+git checkout -b fix/<nome-curto>
+```
+
+2. Implementar, testar local, commitar.
+
+3. Abrir PR:
+
+* **base:** `main`
+* **compare:** `fix/<nome-curto>`
+
+4. Após merge no `main`:
+
+```bash
+git checkout main
+git pull --ff-only
+./ops/release.sh vX.Y.Z
+```
+
+5. Deploy em produção:
+
+```bash
+sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh vX.Y.Z
+```
+
+6. **Sincronizar hotfix em `develop` (obrigatório)**:
+
+* abrir PR **base `develop`** ← **compare `main`**
+* merge no `develop`
+
+---
+
+# 4) “Pegadinhas” (e como lidar)
 
 ## 4.1 “dubious ownership” no git
-
-Você viu isso quando rodou como root.
 
 **Regra simples**: deploy sempre como `hscadmin`:
 
@@ -249,31 +353,65 @@ Isso aconteceu porque você colou comandos que dependiam de variáveis do script
 
 ## 4.3 Docker “não encontrado” no local
 
-Você já resolveu instalando Docker e adicionando o user ao grupo docker (ok).
+Instalar Docker e adicionar o user ao grupo docker.
 
 ---
 
 # 5) Checklist oficial do seu dia-a-dia (simples e repetível)
 
-## Implementar feature
+## Implementar feature (dia-a-dia)
 
-1. codar local
-2. `./ops/dev.sh`
-3. `./ops/smoke-local.sh`
-4. commit (git)
+1. `git checkout develop && git pull --ff-only`
+2. `git checkout -b feature/<nome-curto>`
+3. codar local
+4. `./ops/dev.sh`
+5. `./ops/smoke-local.sh`
+6. commits na feature
+7. PR `feature/<nome-curto>` → `develop`
 
-## Preparar release
+## Preparar release (promover + tag)
 
-5. `./ops/release.sh vX.Y.Z`
+8. PR `develop` → `main`
+9. merge no `main`
+10. `git checkout main && git pull --ff-only`
+11. `./ops/release.sh vX.Y.Z`
 
 ## Publicar em prod
 
-6. SSH no Lightsail
-7. `sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh vX.Y.Z`
+12. SSH no Lightsail
+13. `sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh vX.Y.Z`
 
 ## Se deu ruim
 
-8. `sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh --rollback`
+14. `sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh --rollback`
+
+## Hotfix (produção)
+
+1. `git checkout main && git pull --ff-only`
+2. `git checkout -b fix/<nome-curto>`
+3. codar + testar local + commits
+4. PR `fix/<nome-curto>` → `main`
+5. `./ops/release.sh vX.Y.Z` (no `main`)
+6. deploy em prod (tag)
+7. PR `main` → `develop` (sync obrigatório)
+
+---
+
+# 5.1) Configuração recomendada no GitHub (proteção de branch)
+
+No repositório: **Settings → Branches → Branch protection rules**
+
+Aplicar para `main`:
+
+* Require a pull request before merging
+* Require approvals (>= 1)
+* Require conversation resolution
+* Do not allow force pushes
+* Do not allow deletions
+
+Aplicar para `develop`:
+
+* Mesmo conjunto (ou approvals >= 1, dependendo do rigor desejado)
 
 ---
 
@@ -800,34 +938,53 @@ if [[ ! -d .git ]]; then
   exit 1
 fi
 
-# Garantir que smoke script exista
-if [[ ! -x "$SMOKE_SCRIPT" ]]; then
-  echo "❌ Smoke script não encontrado ou não executável: $SMOKE_SCRIPT"
-  echo "➡️  Rode: chmod +x ops/smoke-local.sh"
+# (novo) garantir branch main
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "main" ]]; then
+  echo "❌ Release só pode ser gerada a partir do branch 'main' (atual: $BRANCH)"
   exit 1
 fi
 
-echo "➡️  Rodando smoke local antes do release..."
+# (novo) garantir workspace limpo
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "❌ Working tree suja. Commit/stash antes de gerar release."
+  git status --porcelain
+  exit 1
+fi
+
+# (novo) garantir main sincronizado com origin
+git fetch origin main --tags
+LOCAL_SHA="$(git rev-parse HEAD)"
+REMOTE_SHA="$(git rev-parse origin/main)"
+if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
+  echo "❌ Seu main local não está igual ao origin/main. Rode: git pull --ff-only"
+  exit 1
+fi
+
+# (novo) impedir tag duplicada
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+  echo "❌ Tag já existe: $TAG"
+  exit 1
+fi
+
+# Rodar smoke local obrigatório
+if [[ ! -x "$SMOKE_SCRIPT" ]]; then
+  echo "❌ Smoke script não encontrado/executável: $SMOKE_SCRIPT"
+  echo "➡️  Garanta que existe e rode: chmod +x ops/smoke-local.sh"
+  exit 1
+fi
+
+echo "➡️  Rodando smoke local (obrigatório)..."
 "$SMOKE_SCRIPT"
 
-echo "➡️  Criando tag: $TAG"
-git tag "$TAG"
+echo "➡️  Criando tag anotada: $TAG"
+git tag -a "$TAG" -m "release: $TAG"
 
-echo "➡️  Push da tag: $TAG"
+echo "➡️  Push da tag..."
 git push origin "$TAG"
 
 echo "✅ Release concluído: $TAG"
+echo "➡️  Próximo passo (produção):"
+echo "   sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh $TAG"
+echo "======================================"
 ```
-
----
-
-## Próximo passo (como você pediu: 1 micro-bloco por vez)
-
-Como você quer “1 por vez” a partir daqui, o **próximo micro-bloco** que eu recomendo é:
-
-**Micro-bloco #1 — Padronizar “como rodar local” em 1 comando oficial**
-
-* decisão: você quer usar `dev.sh` como padrão diário e `deploy-local.sh` como “check final”? (eu recomendo SIM)
-* então a gente só ajusta: documentação + naming + garantir `.env.local` template e `.gitignore`
-
-Se você disser “OK micro-bloco #1”, eu te passo **apenas o passo 1** (bem micro) e a gente segue sequencialmente.
