@@ -71,8 +71,11 @@ jobs:
           set -euo pipefail
           TAG="${{ steps.target.outputs.tag }}"
 
-          # garante que temos origin/main e tags
-          git fetch origin main --tags --prune
+          # Atualiza só o necessário (sem mexer em todas as tags)
+          git fetch origin main --prune
+
+          # Garante que a tag alvo existe localmente
+          git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" --force
 
           TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
           MAIN_COMMIT="$(git rev-parse origin/main)"
