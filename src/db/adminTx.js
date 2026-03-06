@@ -24,18 +24,7 @@ export async function insertAdminAudit(conn, {
   method,
   action,
   via,
-  forceFail = false,
 }) {
-  if (forceFail) {
-    await conn.execute(
-      `
-      INSERT INTO admin_audit_log (non_existing_column)
-      VALUES (1)
-      `,
-    );
-    return;
-  }
-
   await conn.execute(
     `
     INSERT INTO admin_audit_log

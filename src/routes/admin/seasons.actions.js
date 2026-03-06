@@ -18,17 +18,12 @@ export function registerAdminSeasonsActionRoutes(app, {
     const slug = normalizeSlug(req.params.slug);
     if (!slug) return sendBadRequest(res, "invalid_slug");
 
-    const forceAuditFail =
-      process.env.ADMIN_AUDIT_FAIL_TEST === "1" &&
-      req.get("X-HSC-Fail-Audit") === "1";
-
     const result = await seasonsRepo.activateSeasonTx(slug, {
       userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
       route: req.route?.path || req.originalUrl || "/admin/seasons/:slug/activate",
       method: req.method,
       action: "season.activate",
       via: req.admin?.via === "session" ? "session" : "admin-key",
-      forceFail: forceAuditFail,
     });
 
     if (!result.ok) {

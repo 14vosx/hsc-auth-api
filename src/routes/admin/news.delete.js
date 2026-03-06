@@ -17,10 +17,6 @@ export function registerAdminNewsDeleteRoute(app, {
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    const forceAuditFail =
-      process.env.ADMIN_AUDIT_FAIL_TEST === "1" &&
-      req.get("X-HSC-Fail-Audit") === "1";
-
     try {
       const deletedId = await runInTx(dbConfig, async (conn) => {
         const [result] = await conn.execute(
@@ -40,7 +36,6 @@ export function registerAdminNewsDeleteRoute(app, {
           method: req.method,
           action: "news.delete",
           via: req.admin?.via === "session" ? "session" : "admin-key",
-          forceFail: forceAuditFail,
         });
 
         return id;

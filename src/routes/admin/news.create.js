@@ -28,10 +28,6 @@ export function registerAdminNewsCreateRoute(app, {
       return res.status(400).json({ ok: false, error: "invalid_slug" });
     }
 
-    const forceAuditFail =
-      process.env.ADMIN_AUDIT_FAIL_TEST === "1" &&
-      req.get("X-HSC-Fail-Audit") === "1";
-
     try {
       const created = await runInTx(dbConfig, async (conn) => {
         const [result] = await conn.execute(
@@ -55,7 +51,6 @@ export function registerAdminNewsCreateRoute(app, {
           method: req.method,
           action: "news.create",
           via: req.admin?.via === "session" ? "session" : "admin-key",
-          forceFail: forceAuditFail,
         });
 
         return {

@@ -56,10 +56,6 @@ export function registerAdminNewsUpdateRoute(app, {
       return res.status(400).json({ ok: false, error: "no_fields_to_update" });
     }
 
-    const forceAuditFail =
-      process.env.ADMIN_AUDIT_FAIL_TEST === "1" &&
-      req.get("X-HSC-Fail-Audit") === "1";
-
     try {
       const item = await runInTx(dbConfig, async (conn) => {
         const [result] = await conn.execute(
@@ -83,7 +79,6 @@ export function registerAdminNewsUpdateRoute(app, {
           method: req.method,
           action: "news.update",
           via: req.admin?.via === "session" ? "session" : "admin-key",
-          forceFail: forceAuditFail,
         });
 
         const [rows] = await conn.execute(
