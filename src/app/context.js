@@ -2,6 +2,7 @@
 import { buildDbConfig } from "../config/db.js";
 import { createSeasonsRepo } from "../../seasons.repo.js";
 import { createRequireAdmin } from "../middlewares/adminKey.js";
+import { runInTx, insertAdminAudit } from "../db/adminTx.js";
 
 import {
   sendPublic,
@@ -47,6 +48,8 @@ export function createAppContext() {
 
       dbConfig,
       seasonsRepo,
+      runInTx,
+      insertAdminAudit,
       requireAdmin,
       adminKey,
 

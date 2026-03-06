@@ -1,7 +1,12 @@
 // src/routes/admin/news.unpublish.js
-import mysql from "mysql2/promise";
 
-export function registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, getDbReady }) {
+export function registerAdminNewsUnpublishRoute(app, {
+  requireAdmin,
+  dbConfig,
+  getDbReady,
+  runInTx,
+  insertAdminAudit,
+}) {
   app.post("/admin/news/:id/unpublish", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     if (!getDbReady())
@@ -13,39 +18,52 @@ export function registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, g
     }
 
     try {
-      const connection = await mysql.createConnection(dbConfig);
+      const item = await runInTx(dbConfig, async (conn) => {
+        const [result] = await conn.execute(
+          `
+          UPDATE news
+          SET status = 'draft',
+              published_at = NULL
+          WHERE id = ? AND status = 'published'
+          `,
+          [id],
+        );
 
-      const [result] = await connection.execute(
-        `
-        UPDATE news
-        SET status = 'draft',
-            published_at = NULL
-        WHERE id = ? AND status = 'published'
-        `,
-        [id],
-      );
+        if (result.affectedRows === 0) {
+          const err = new Error("not_found_or_not_published");
+          err.code = "NOT_FOUND_OR_NOT_PUBLISHED";
+          throw err;
+        }
 
-      if (result.affectedRows === 0) {
-        await connection.end();
+        await insertAdminAudit(conn, {
+          userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+          route: req.route?.path || req.originalUrl || "/admin/news/:id/unpublish",
+          method: req.method,
+          action: "news.unpublish",
+          via: req.admin?.via === "session" ? "session" : "admin-key",
+        });
+
+        const [rows] = await conn.execute(
+          `
+          SELECT id, slug, title, excerpt, image_url, status, published_at, created_at, updated_at
+          FROM news
+          WHERE id = ?
+          LIMIT 1
+          `,
+          [id],
+        );
+
+        return rows[0];
+      });
+
+      return res.json({ ok: true, item });
+    } catch (err) {
+      if (err?.code === "NOT_FOUND_OR_NOT_PUBLISHED") {
         return res
           .status(404)
           .json({ ok: false, error: "not_found_or_not_published" });
       }
 
-      const [rows] = await connection.execute(
-        `
-        SELECT id, slug, title, excerpt, image_url, status, published_at, created_at, updated_at
-        FROM news
-        WHERE id = ?
-        LIMIT 1
-        `,
-        [id],
-      );
-
-      await connection.end();
-
-      return res.json({ ok: true, item: rows[0] });
-    } catch (_err) {
       return res.status(500).json({ ok: false, error: "db_error" });
     }
   });
