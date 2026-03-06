@@ -23,6 +23,8 @@ export function registerAllRoutes(app, deps) {
 
     dbConfig,
     seasonsRepo,
+    runInTx,
+    insertAdminAudit,
     requireAdmin,
     adminKey,
 
@@ -54,7 +56,13 @@ export function registerAllRoutes(app, deps) {
 
   registerAdminNewsCreateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
   registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
-  registerAdminNewsPublishRoute(app, { requireAdmin, dbConfig, getDbReady });
+  registerAdminNewsPublishRoute(app, {
+    requireAdmin,
+    dbConfig,
+    getDbReady,
+    runInTx,
+    insertAdminAudit,
+  });
   registerAdminNewsUpdateRoute(app, { requireAdmin, dbConfig, getDbReady, normalizeSlug });
   registerAdminNewsUnpublishRoute(app, { requireAdmin, dbConfig, getDbReady });
   registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady });
