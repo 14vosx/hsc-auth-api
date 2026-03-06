@@ -147,7 +147,7 @@ export function createSeasonsRepo(dbConfig) {
     });
   }
 
-  async function activateSeasonTx(slug) {
+  async function activateSeasonTx(slug, audit = null) {
     const conn = await mysql.createConnection(dbConfig);
     try {
       await conn.beginTransaction();
@@ -198,6 +198,10 @@ export function createSeasonsRepo(dbConfig) {
         `,
         [slug],
       );
+
+      if (audit) {
+        await insertAdminAudit(conn, audit);
+      }
 
       await conn.commit();
       return { ok: true };
