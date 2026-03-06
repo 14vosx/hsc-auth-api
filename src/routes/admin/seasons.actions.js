@@ -18,7 +18,13 @@ export function registerAdminSeasonsActionRoutes(app, {
     const slug = normalizeSlug(req.params.slug);
     if (!slug) return sendBadRequest(res, "invalid_slug");
 
-    const result = await seasonsRepo.activateSeasonTx(slug);
+    const result = await seasonsRepo.activateSeasonTx(slug, {
+      userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+      route: req.route?.path || req.originalUrl || "/admin/seasons/:slug/activate",
+      method: req.method,
+      action: "season.activate",
+      via: req.admin?.via === "session" ? "session" : "admin-key",
+    });
 
     if (!result.ok) {
       if (result.error === "season_not_found")
@@ -48,7 +54,14 @@ export function registerAdminSeasonsActionRoutes(app, {
         return res.status(200).json({ ok: true, slug, status: "closed" });
       }
 
-      await seasonsRepo.setSeasonClosed(slug);
+      await seasonsRepo.setSeasonClosed(slug, {
+        userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+        route: req.route?.path || req.originalUrl || "/admin/seasons/:slug/close",
+        method: req.method,
+        action: "season.close",
+        via: req.admin?.via === "session" ? "session" : "admin-key",
+      });
+
       return res.status(200).json({ ok: true, slug, status: "closed" });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });

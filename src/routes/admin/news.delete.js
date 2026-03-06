@@ -1,7 +1,12 @@
 // src/routes/admin/news.delete.js
-import mysql from "mysql2/promise";
 
-export function registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getDbReady }) {
+export function registerAdminNewsDeleteRoute(app, {
+  requireAdmin,
+  dbConfig,
+  getDbReady,
+  runInTx,
+  insertAdminAudit,
+}) {
   app.delete("/admin/news/:id", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     if (!getDbReady())
@@ -13,18 +18,35 @@ export function registerAdminNewsDeleteRoute(app, { requireAdmin, dbConfig, getD
     }
 
     try {
-      const connection = await mysql.createConnection(dbConfig);
+      const deletedId = await runInTx(dbConfig, async (conn) => {
+        const [result] = await conn.execute(
+          `DELETE FROM news WHERE id = ?`,
+          [id],
+        );
 
-      const [result] = await connection.execute(`DELETE FROM news WHERE id = ?`, [id]);
+        if (result.affectedRows === 0) {
+          const err = new Error("not_found");
+          err.code = "NOT_FOUND";
+          throw err;
+        }
 
-      await connection.end();
+        await insertAdminAudit(conn, {
+          userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+          route: req.route?.path || req.originalUrl || "/admin/news/:id",
+          method: req.method,
+          action: "news.delete",
+          via: req.admin?.via === "session" ? "session" : "admin-key",
+        });
 
-      if (result.affectedRows === 0) {
+        return id;
+      });
+
+      return res.json({ ok: true, deleted: deletedId });
+    } catch (err) {
+      if (err?.code === "NOT_FOUND") {
         return res.status(404).json({ ok: false, error: "not_found" });
       }
 
-      return res.json({ ok: true, deleted: id });
-    } catch (_err) {
       return res.status(500).json({ ok: false, error: "db_error" });
     }
   });

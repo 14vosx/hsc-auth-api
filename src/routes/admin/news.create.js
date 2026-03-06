@@ -1,11 +1,12 @@
 // src/routes/admin/news.create.js
-import mysql from "mysql2/promise";
 
 export function registerAdminNewsCreateRoute(app, {
   requireAdmin,
   dbConfig,
   getDbReady,
   normalizeSlug,
+  runInTx,
+  insertAdminAudit,
 }) {
   app.post("/admin/news", async (req, res) => {
     if (!requireAdmin(req, res)) return;
@@ -28,30 +29,42 @@ export function registerAdminNewsCreateRoute(app, {
     }
 
     try {
-      const connection = await mysql.createConnection(dbConfig);
+      const created = await runInTx(dbConfig, async (conn) => {
+        const [result] = await conn.execute(
+          `
+          INSERT INTO news
+          (slug, title, excerpt, content, image_url, status, published_at)
+          VALUES (?, ?, ?, ?, ?, 'draft', NULL)
+          `,
+          [
+            cleanSlug,
+            String(title).trim(),
+            excerpt != null ? String(excerpt).trim() : null,
+            String(content),
+            image_url != null ? String(image_url).trim() : null,
+          ],
+        );
 
-      const [result] = await connection.execute(
-        `
-        INSERT INTO news
-        (slug, title, excerpt, content, image_url, status, published_at)
-        VALUES (?, ?, ?, ?, ?, 'draft', NULL)
-        `,
-        [
-          cleanSlug,
-          String(title).trim(),
-          excerpt != null ? String(excerpt).trim() : null,
-          String(content),
-          image_url != null ? String(image_url).trim() : null,
-        ],
-      );
+        await insertAdminAudit(conn, {
+          userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+          route: req.route?.path || req.originalUrl || "/admin/news",
+          method: req.method,
+          action: "news.create",
+          via: req.admin?.via === "session" ? "session" : "admin-key",
+        });
 
-      await connection.end();
+        return {
+          id: result.insertId,
+          slug: cleanSlug,
+          status: "draft",
+        };
+      });
 
       return res.status(201).json({
         ok: true,
-        id: result.insertId,
-        slug: cleanSlug,
-        status: "draft",
+        id: created.id,
+        slug: created.slug,
+        status: created.status,
       });
     } catch (err) {
       const msg = err?.message || String(err);

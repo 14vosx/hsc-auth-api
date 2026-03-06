@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import { runInTx, insertAdminAudit } from "./src/db/adminTx.js";
 
 /**
  * Repo layer: Seasons
@@ -58,8 +59,8 @@ export function createSeasonsRepo(dbConfig) {
     });
   }
 
-  async function insertSeason({ slug, name, description, startAt, endAt }) {
-    return withConn(async (conn) => {
+  async function insertSeason({ slug, name, description, startAt, endAt, audit = null }) {
+    return runInTx(dbConfig, async (conn) => {
       const [result] = await conn.execute(
         `
         INSERT INTO seasons (slug, name, description, start_at, end_at, status)
@@ -67,12 +68,16 @@ export function createSeasonsRepo(dbConfig) {
         `,
         [slug, name, description ?? null, startAt, endAt],
       );
+
+      if (audit) {
+        await insertAdminAudit(conn, audit);
+      }
+
       return result.insertId;
     });
   }
 
-  async function patchSeasonBySlug(slug, patch) {
-    // Build a safe SET list from allowed keys only
+  async function patchSeasonBySlug(slug, patch, audit = null) {
     const sets = [];
     const vals = [];
 
@@ -97,7 +102,7 @@ export function createSeasonsRepo(dbConfig) {
 
     vals.push(slug);
 
-    return withConn(async (conn) => {
+    return runInTx(dbConfig, async (conn) => {
       const [result] = await conn.execute(
         `
         UPDATE seasons
@@ -106,12 +111,21 @@ export function createSeasonsRepo(dbConfig) {
         `,
         vals,
       );
+
+      if ((result.affectedRows || 0) === 0) {
+        return 0;
+      }
+
+      if (audit) {
+        await insertAdminAudit(conn, audit);
+      }
+
       return result.affectedRows || 0;
     });
   }
 
-  async function setSeasonClosed(slug) {
-    return withConn(async (conn) => {
+  async function setSeasonClosed(slug, audit = null) {
+    return runInTx(dbConfig, async (conn) => {
       const [result] = await conn.execute(
         `
         UPDATE seasons
@@ -120,16 +134,24 @@ export function createSeasonsRepo(dbConfig) {
         `,
         [slug],
       );
+
+      if ((result.affectedRows || 0) === 0) {
+        return 0;
+      }
+
+      if (audit) {
+        await insertAdminAudit(conn, audit);
+      }
+
       return result.affectedRows || 0;
     });
   }
 
-  async function activateSeasonTx(slug) {
+  async function activateSeasonTx(slug, audit = null) {
     const conn = await mysql.createConnection(dbConfig);
     try {
       await conn.beginTransaction();
 
-      // Lock target row
       const [targetRows] = await conn.execute(
         `
         SELECT id, slug, status
@@ -151,7 +173,6 @@ export function createSeasonsRepo(dbConfig) {
         return { ok: false, error: "season_closed" };
       }
 
-      // Lock any active season rows (if any)
       await conn.execute(
         `
         SELECT id FROM seasons
@@ -160,7 +181,6 @@ export function createSeasonsRepo(dbConfig) {
         `,
       );
 
-      // Demote current active -> draft (do NOT auto-close)
       await conn.execute(
         `
         UPDATE seasons
@@ -170,7 +190,6 @@ export function createSeasonsRepo(dbConfig) {
         [slug],
       );
 
-      // Promote target -> active
       await conn.execute(
         `
         UPDATE seasons
@@ -179,6 +198,10 @@ export function createSeasonsRepo(dbConfig) {
         `,
         [slug],
       );
+
+      if (audit) {
+        await insertAdminAudit(conn, audit);
+      }
 
       await conn.commit();
       return { ok: true };
