@@ -1,11 +1,12 @@
 // src/routes/admin/news.update.js
-import mysql from "mysql2/promise";
 
 export function registerAdminNewsUpdateRoute(app, {
   requireAdmin,
   dbConfig,
   getDbReady,
   normalizeSlug,
+  runInTx,
+  insertAdminAudit,
 }) {
   app.patch("/admin/news/:id", async (req, res) => {
     if (!requireAdmin(req, res)) return;
@@ -55,38 +56,55 @@ export function registerAdminNewsUpdateRoute(app, {
       return res.status(400).json({ ok: false, error: "no_fields_to_update" });
     }
 
+    const forceAuditFail =
+      process.env.ADMIN_AUDIT_FAIL_TEST === "1" &&
+      req.get("X-HSC-Fail-Audit") === "1";
+
     try {
-      const connection = await mysql.createConnection(dbConfig);
+      const item = await runInTx(dbConfig, async (conn) => {
+        const [result] = await conn.execute(
+          `
+          UPDATE news
+          SET ${updates.join(", ")}
+          WHERE id = ?
+          `,
+          [...params, id],
+        );
 
-      const [result] = await connection.execute(
-        `
-        UPDATE news
-        SET ${updates.join(", ")}
-        WHERE id = ?
-        `,
-        [...params, id],
-      );
+        if (result.affectedRows === 0) {
+          const err = new Error("not_found");
+          err.code = "NOT_FOUND";
+          throw err;
+        }
 
-      if (result.affectedRows === 0) {
-        await connection.end();
-        return res.status(404).json({ ok: false, error: "not_found" });
-      }
+        await insertAdminAudit(conn, {
+          userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+          route: req.route?.path || req.originalUrl || "/admin/news/:id",
+          method: req.method,
+          action: "news.update",
+          via: req.admin?.via === "session" ? "session" : "admin-key",
+          forceFail: forceAuditFail,
+        });
 
-      const [rows] = await connection.execute(
-        `
-        SELECT id, slug, title, excerpt, image_url, status, published_at, created_at, updated_at
-        FROM news
-        WHERE id = ?
-        LIMIT 1
-        `,
-        [id],
-      );
+        const [rows] = await conn.execute(
+          `
+          SELECT id, slug, title, excerpt, image_url, status, published_at, created_at, updated_at
+          FROM news
+          WHERE id = ?
+          LIMIT 1
+          `,
+          [id],
+        );
 
-      await connection.end();
+        return rows[0];
+      });
 
-      return res.json({ ok: true, item: rows[0] });
+      return res.json({ ok: true, item });
     } catch (err) {
       const msg = err?.message || String(err);
+      if (err?.code === "NOT_FOUND") {
+        return res.status(404).json({ ok: false, error: "not_found" });
+      }
       if (msg.toLowerCase().includes("duplicate")) {
         return res.status(409).json({ ok: false, error: "slug_already_exists" });
       }
