@@ -35,6 +35,13 @@ export function registerAdminSeasonsWriteRoutes(app, {
         description: description != null ? String(description).trim() : null,
         startAt: v.startAt,
         endAt: v.endAt,
+        audit: {
+          userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+          route: req.route?.path || req.originalUrl || "/admin/seasons",
+          method: req.method,
+          action: "season.create",
+          via: req.admin?.via === "session" ? "session" : "admin-key",
+        },
       });
 
       return res.status(201).json({
@@ -74,7 +81,13 @@ export function registerAdminSeasonsWriteRoutes(app, {
           v.field ? { field: v.field } : undefined,
         );
 
-      const affected = await seasonsRepo.patchSeasonBySlug(slug, v.patch);
+      const affected = await seasonsRepo.patchSeasonBySlug(slug, v.patch, {
+        userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
+        route: req.route?.path || req.originalUrl || "/admin/seasons/:slug",
+        method: req.method,
+        action: "season.update",
+        via: req.admin?.via === "session" ? "session" : "admin-key",
+      });
 
       return res.status(200).json({ ok: true, slug, updated: affected > 0 });
     } catch (err) {
