@@ -3,11 +3,11 @@ import nodemailer from "nodemailer";
 import {
   MAGIC_LINK_FROM_EMAIL,
   MAGIC_LINK_SUBJECT,
-  SMTP_HOST,
-  SMTP_PORT,
-  SMTP_SECURE,
-  SMTP_USER,
-  SMTP_PASS,
+  getSmtpHost,
+  getSmtpPort,
+  getSmtpSecure,
+  getSmtpUser,
+  getSmtpPass,
 } from "../../config/auth.js";
 
 function buildMagicLinkEmailHtml({
@@ -25,23 +25,29 @@ function buildMagicLinkEmailText({
 }
 
 function ensureSmtpConfig() {
-  if (!SMTP_HOST) throw new Error("smtp_host_missing");
-  if (!SMTP_PORT || Number.isNaN(SMTP_PORT)) throw new Error("smtp_port_invalid");
-  if (!SMTP_USER) throw new Error("smtp_user_missing");
-  if (!SMTP_PASS) throw new Error("smtp_pass_missing");
+  const host = getSmtpHost();
+  const port = getSmtpPort();
+  const user = getSmtpUser();
+  const pass = getSmtpPass();
+
+  if (!host) throw new Error("smtp_host_missing");
+  if (!port || Number.isNaN(port)) throw new Error("smtp_port_invalid");
+  if (!user) throw new Error("smtp_user_missing");
+  if (!pass) throw new Error("smtp_pass_missing");
   if (!MAGIC_LINK_FROM_EMAIL) throw new Error("magic_link_from_email_missing");
 }
 
 function createTransport() {
   ensureSmtpConfig();
+
   return nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASS,
-      },
+    host: getSmtpHost(),
+    port: getSmtpPort(),
+    secure: getSmtpSecure(),
+    auth: {
+      user: getSmtpUser(),
+      pass: getSmtpPass(),
+    },
   });
 }
 export async function deliverMagicLink({
