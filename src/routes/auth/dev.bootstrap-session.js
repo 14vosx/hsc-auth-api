@@ -8,6 +8,7 @@ import {
   AUTH_DEV_ADMIN_NAME,
 } from "../../config/auth.js";
 import { createSessionForUser } from "../../db/adminSessions.js";
+import { buildAdminSessionCookie } from "../../utils/sessionCookie.js";
 
 function buildCookie(rawToken) {
   const maxAgeSeconds = ADMIN_SESSION_TTL_HOURS * 60 * 60;
@@ -94,7 +95,7 @@ export function registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady }) 
         ADMIN_SESSION_TTL_HOURS,
       );
 
-      res.setHeader("Set-Cookie", buildCookie(session.rawToken));
+      res.setHeader("Set-Cookie", buildAdminSessionCookie(session.rawToken));
 
       return res.status(200).json({
         ok: true,
