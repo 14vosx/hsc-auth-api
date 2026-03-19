@@ -215,6 +215,44 @@ export async function ensureSchema(dbConfig) {
     );
     schemaVersion = 7;
   }
+
+    // v8: reconcile legacy sessions shape in already-upgraded environments
+  if (schemaVersion < 8) {
+    const hasTokenHash = await columnExists(connection, "sessions", "token_hash");
+    const hasRevokedAt = await columnExists(connection, "sessions", "revoked_at");
+    const hasUpdatedAt = await columnExists(connection, "sessions", "updated_at");
+
+    if (!hasTokenHash) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN token_hash CHAR(64) NULL AFTER user_id
+      `);
+
+      await connection.execute(`
+        CREATE UNIQUE INDEX uniq_sessions_token_hash ON sessions (token_hash)
+      `);
+    }
+
+    if (!hasRevokedAt) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN revoked_at DATETIME NULL AFTER expires_at
+      `);
+    }
+
+    if (!hasUpdatedAt) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP AFTER created_at
+      `);
+    }
+
+    await connection.execute(
+      `UPDATE schema_meta SET version = 8 WHERE version < 8`,
+    );
+    schemaVersion = 8;
+  }
   
   await connection.end();
 }
