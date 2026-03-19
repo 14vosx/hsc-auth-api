@@ -101,6 +101,9 @@ git checkout -f "$TAG"
 echo "➡️  Instalando dependências (npm ci)..."
 npm ci --omit=dev
 
+echo "➡️  Rodando migrations do banco..."
+ENV_FILE="$ENV_FILE" npm run db:migrate
+
 echo "➡️  Reiniciando serviço: $SERVICE"
 sudo /usr/bin/systemctl restart "$SERVICE"
 
