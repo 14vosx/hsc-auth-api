@@ -1,7 +1,7 @@
 // src/app/context.js
 import { buildDbConfig } from "../config/db.js";
 import { createSeasonsRepo } from "../../seasons.repo.js";
-import { createRequireAdmin } from "../middlewares/adminKey.js";
+import { createAdminAuth } from "../middlewares/adminAuth.js";
 import { runInTx, insertAdminAudit } from "../db/adminTx.js";
 
 import {
@@ -34,10 +34,13 @@ export function createAppContext() {
   const port = Number(process.env.PORT || 3000);
 
   const adminKey = process.env.ADMIN_KEY;
-  const requireAdmin = createRequireAdmin(adminKey);
-
   const dbConfig = buildDbConfig();
   const seasonsRepo = createSeasonsRepo(dbConfig);
+
+  const { resolveSessionAdmin, resolveAdmin, requireAdmin } = createAdminAuth({
+    adminKey,
+    dbConfig,
+  });
 
   return {
     port,
@@ -50,6 +53,8 @@ export function createAppContext() {
       seasonsRepo,
       runInTx,
       insertAdminAudit,
+      resolveSessionAdmin,
+      resolveAdmin,
       requireAdmin,
       adminKey,
 

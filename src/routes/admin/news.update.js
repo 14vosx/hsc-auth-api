@@ -9,7 +9,7 @@ export function registerAdminNewsUpdateRoute(app, {
   insertAdminAudit,
 }) {
   app.patch("/admin/news/:id", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
