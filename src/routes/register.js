@@ -16,6 +16,8 @@ import { registerAdminNewsDeleteRoute } from "./admin/news.delete.js";
 
 import { registerAdminSeasonsWriteRoutes } from "./admin/seasons.write.js";
 import { registerAdminSeasonsActionRoutes } from "./admin/seasons.actions.js";
+import { registerAuthRequestMagicLinkRoute } from "./auth/request-magic-link.js";
+import { registerAuthConsumeMagicLinkRoute } from "./auth/consume-magic-link.js";
 
 
 export function registerAllRoutes(app, deps) {
@@ -47,7 +49,8 @@ export function registerAllRoutes(app, deps) {
   registerHealthRoutes(app, { corsMeta, getDbStatus });
   registerAuthSessionRoute(app, { resolveSessionAdmin });
   registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady });
-
+  registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
+  registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {
     seasonsRepo,
