@@ -28,6 +28,7 @@ export async function ensureSchema(dbConfig) {
       id INT AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(255) UNIQUE,
       display_name VARCHAR(255),
+      role ENUM('viewer','editor','admin') NOT NULL DEFAULT 'viewer',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -107,5 +108,43 @@ export async function ensureSchema(dbConfig) {
     schemaVersion = 4;
   }
 
+  // v5: add role column to users table
+  if (schemaVersion < 5) {
+    await connection.execute(`
+      ALTER TABLE users
+      ADD COLUMN role ENUM('viewer','editor','admin') NOT NULL DEFAULT 'viewer'
+    `);
+
+    await connection.execute(
+      `UPDATE schema_meta SET version = 5 WHERE version < 5`,
+    );
+    schemaVersion = 5;
+  }
+
+  // v6: create sessions
+  if (schemaVersion < 6) {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id CHAR(36) PRIMARY KEY,
+        user_id INT NOT NULL,
+        token_hash CHAR(64) NOT NULL UNIQUE,
+        expires_at DATETIME NOT NULL,
+        revoked_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_sessions_user_id (user_id),
+        KEY idx_sessions_expires_at (expires_at),
+        CONSTRAINT fk_sessions_user FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE
+      )
+    `);
+
+    await connection.execute(
+      `UPDATE schema_meta SET version = 6 WHERE version < 6`,
+    );
+    schemaVersion = 6;
+  }
+  
   await connection.end();
 }
