@@ -4,6 +4,7 @@ import cors from "cors";
 // IMPORTANTÍSSIMO: sem trailing slash
 function computeAllowedOrigins() {
   const raw = (process.env.ALLOWED_ORIGINS || "").trim();
+
   if (raw) {
     return raw
       .split(",")
@@ -13,7 +14,7 @@ function computeAllowedOrigins() {
   }
 
   const single = (process.env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "");
-  return [single || "https://auth.haxixesmokeclub.com"];
+  return [single || "https://auth-api.haxixesmokeclub.com"];
 }
 
 export function buildCors() {
@@ -23,12 +24,13 @@ export function buildCors() {
   const corsOptions = {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
+
       const clean = String(origin).trim().replace(/\/$/, "");
       cb(null, allowedOriginsSet.has(clean));
     },
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: false,
+    credentials: true,
     maxAge: 86400,
   };
 

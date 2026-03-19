@@ -190,6 +190,31 @@ export async function ensureSchema(dbConfig) {
     );
     schemaVersion = 6;
   }
+
+  // v7: create or reconcile magic_links
+  if (schemaVersion < 7) {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS magic_links (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token_hash CHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
+        CONSTRAINT fk_magic_links_user FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE,
+        UNIQUE KEY uniq_magic_links_token_hash (token_hash),
+        KEY idx_magic_links_expires_at (expires_at),
+        KEY idx_magic_links_user_id (user_id)
+      )
+    `);
+
+    await connection.execute(
+      `UPDATE schema_meta SET version = 7 WHERE version < 7`,
+    );
+    schemaVersion = 7;
+  }
   
   await connection.end();
 }
