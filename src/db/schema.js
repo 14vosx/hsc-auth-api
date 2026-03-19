@@ -1,6 +1,17 @@
 // src/db/schema.js
 import mysql from "mysql2/promise";
 
+/**
+ * LEGACY SCHEMA COMPATIBILITY FILE
+ *
+ * Este arquivo não é mais o mecanismo principal de evolução do banco.
+ * Novas mudanças de schema devem ser implementadas em:
+ *   db/migrations/*.sql
+ *
+ * Este arquivo existe apenas para compatibilidade histórica/legada.
+ * Não adicionar novas features de schema aqui.
+ */
+
 export async function ensureSchema(dbConfig) {
   const connection = await mysql.createConnection(dbConfig);
 
