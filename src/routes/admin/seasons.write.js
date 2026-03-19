@@ -13,7 +13,7 @@ export function registerAdminSeasonsWriteRoutes(app, {
 }) {
   // POST /admin/seasons
   app.post("/admin/seasons", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
@@ -61,7 +61,7 @@ export function registerAdminSeasonsWriteRoutes(app, {
 
   // PATCH /admin/seasons/:slug
   app.patch("/admin/seasons/:slug", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
