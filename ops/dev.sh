@@ -4,6 +4,7 @@ set -euo pipefail
 # ======================================
 # HSC AUTH API — DEV (LOCAL, PERSISTENTE)
 # - Sobe dependências (MariaDB via Docker)
+# - Aguarda MariaDB ficar pronto
 # - Sobe a API com .env.local
 # - Não encerra automaticamente (Ctrl+C para parar a API)
 # ======================================
@@ -39,15 +40,48 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "❌ docker não encontrado."
   exit 1
 fi
+
 if ! docker compose version >/dev/null 2>&1; then
   echo "❌ docker compose plugin não disponível."
   exit 1
 fi
 
+# Carrega variáveis no ambiente atual cedo, para usar no wait loop
+set -a
+. "$ENV_FILE"
+set +a
+
 # Subir dependências (se houver compose)
 if [[ -f "docker-compose.yml" || -f "compose.yml" ]]; then
   echo "➡️  Subindo dependências (docker compose up -d)..."
   docker compose up -d
+
+  echo "➡️  Aguardando MariaDB ficar pronto..."
+
+  MAX_ATTEMPTS=5
+  ATTEMPT=1
+
+  while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
+    if docker exec hsc-auth-mariadb mariadb-admin ping \
+      -h 127.0.0.1 \
+      -u"${DB_USER}" \
+      -p"${DB_PASS}" \
+      --silent >/dev/null 2>&1; then
+      echo "✅ MariaDB pronto."
+      break
+    fi
+
+    echo "   tentativa $ATTEMPT/$MAX_ATTEMPTS..."
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 2
+  done
+
+  if [[ $ATTEMPT -gt $MAX_ATTEMPTS ]]; then
+    echo "❌ MariaDB não ficou pronto a tempo."
+    echo "➡️  Verifique: docker compose ps"
+    echo "➡️  Verifique: docker compose logs --tail=100"
+    exit 1
+  fi
 else
   echo "⚠️  Nenhum docker-compose.yml encontrado. Pulando dependências."
 fi
@@ -56,11 +90,6 @@ echo "➡️  Instalando dependências Node (npm ci)..."
 npm ci
 
 echo "➡️  Iniciando API (ENV_FILE=$ENV_FILE)..."
-
-# carrega variáveis no ambiente atual
-set -a
-. "$ENV_FILE"
-set +a
 
 # sobe a API com env já carregado
 node index.js

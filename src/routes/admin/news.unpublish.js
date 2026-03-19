@@ -8,7 +8,7 @@ export function registerAdminNewsUnpublishRoute(app, {
   insertAdminAudit,
 }) {
   app.post("/admin/news/:id/unpublish", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
