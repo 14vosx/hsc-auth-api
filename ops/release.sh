@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SMOKE_SCRIPT="$APP_DIR/ops/smoke-local.sh"
+LOCAL_ENV_FILE="${LOCAL_ENV_FILE:-.env.local}"
 
 TAG="${1:-}"
 if [[ -z "$TAG" ]]; then
@@ -73,6 +74,15 @@ if [[ ! -x "$SMOKE_SCRIPT" ]]; then
   echo "➡️  Garanta que existe e rode: chmod +x ops/smoke-local.sh"
   exit 1
 fi
+
+if [[ ! -f "$APP_DIR/$LOCAL_ENV_FILE" ]]; then
+  echo "❌ ENV local não encontrado: $APP_DIR/$LOCAL_ENV_FILE"
+  exit 1
+fi
+
+echo "➡️  Rodando migrations locais..."
+ENV_FILE="$LOCAL_ENV_FILE" npm run db:migrate
+
 
 echo "➡️  Rodando smoke local (obrigatório)..."
 "$SMOKE_SCRIPT"
