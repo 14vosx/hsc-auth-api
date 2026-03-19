@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

@@ -1,21 +1,26 @@
 // src/db/bootstrap.js
-import { ensureSchema } from "./schema.js";
+import mysql from "mysql2/promise";
 
 export function bootstrapDb({ dbConfig, seasonsRepo, onReady, onError }) {
   if (process.env.DB_HOST) {
-    ensureSchema(dbConfig)
-      .then(async () => {
-        // sanity check: ensure repo can query seasons
-        await seasonsRepo.getActiveSeason();
+    mysql
+      .createConnection(dbConfig)
+      .then(async (connection) => {
+        try {
+          await connection.execute(`SELECT 1`);
+          await seasonsRepo.getActiveSeason();
 
-        onReady();
-        console.log("Database schema ensured (v8).");
+          onReady();
+          console.log("Database readiness check passed.");
+        } finally {
+          await connection.end();
+        }
       })
       .catch((err) => {
         onError(err);
-        console.error("Schema bootstrap failed:", err);
+        console.error("Database readiness check failed:", err);
       });
   } else {
-    console.warn("DB not configured. Skipping schema bootstrap.");
+    console.warn("DB not configured. Skipping database readiness check.");
   }
 }
