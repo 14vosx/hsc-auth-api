@@ -1,29 +1,71 @@
-// src/services/auth/magicLinkDelivery.js
+// src/services/auth/magicLinkDelivery.js 
+import nodemailer from "nodemailer";
 import {
   MAGIC_LINK_FROM_EMAIL,
   MAGIC_LINK_SUBJECT,
+  SMTP_HOST,
+  SMTP_PORT,
+  SMTP_SECURE,
+  SMTP_USER,
+  SMTP_PASS,
 } from "../../config/auth.js";
 
+function buildMagicLinkEmailHtml({
+  consumeUrl,
+  expiresAt
+}) {
+  return ` <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;"> <h2>HSC Backoffice Admin</h2> <p>Use o link abaixo para acessar o Backoffice:</p> <p> <a href="${consumeUrl}" target="_blank" rel="noopener noreferrer"> Entrar no Backoffice </a> </p> <p>Este link expira em: <strong>${expiresAt} UTC</strong></p> <p>Se você não solicitou este acesso, ignore este email.</p> </div> `;
+}
+
+function buildMagicLinkEmailText({
+  consumeUrl,
+  expiresAt
+}) {
+  return ["HSC Backoffice Admin", "", "Use o link abaixo para acessar o Backoffice:", consumeUrl, "", `Este link expira em: ${expiresAt} UTC`, "", "Se você não solicitou este acesso, ignore este email.", ].join("\n");
+}
+
+function ensureSmtpConfig() {
+  if (!SMTP_HOST) throw new Error("smtp_host_missing");
+  if (!SMTP_PORT || Number.isNaN(SMTP_PORT)) throw new Error("smtp_port_invalid");
+  if (!SMTP_USER) throw new Error("smtp_user_missing");
+  if (!SMTP_PASS) throw new Error("smtp_pass_missing");
+  if (!MAGIC_LINK_FROM_EMAIL) throw new Error("magic_link_from_email_missing");
+}
+
+function createTransport() {
+  ensureSmtpConfig();
+  return nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+      },
+  });
+}
 export async function deliverMagicLink({
   email,
   consumeUrl,
-  expiresAt,
+  expiresAt
 }) {
-  /**
-   * Fase atual:
-   * - não envia email real ainda
-   * - apenas loga em ambiente não-produtivo
-   *
-   * Próxima fase:
-   * - plugar provider real (Resend / SES / etc.)
-   */
-  if (process.env.NODE_ENV !== "production") {
-    console.log(
-      `[auth-magic-link] to=${email} from=${MAGIC_LINK_FROM_EMAIL} subject="${MAGIC_LINK_SUBJECT}" consumeUrl=${consumeUrl} expiresAt=${expiresAt}`,
-    );
-  }
-
+  const transporter = createTransport();
+  const info = await transporter.sendMail({
+      from: MAGIC_LINK_FROM_EMAIL,
+      to: email,
+      subject: MAGIC_LINK_SUBJECT,
+      text: buildMagicLinkEmailText({
+          consumeUrl,
+          expiresAt
+      }),
+      html: buildMagicLinkEmailHtml({
+          consumeUrl,
+          expiresAt
+      }),
+  });
+  console.log(`[auth-magic-link] delivered to=${email} messageId=${info.messageId}`, );
   return {
-    ok: true,
+      ok: true,
+      messageId: info.messageId,
   };
 }

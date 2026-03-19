@@ -34,3 +34,18 @@ export const MAGIC_LINK_FROM_EMAIL =
 
 export const MAGIC_LINK_SUBJECT =
   process.env.MAGIC_LINK_SUBJECT || "Your HSC Backoffice sign-in link";
+
+export const SMTP_HOST = 
+  process.env.SMTP_HOST || ""; 
+
+export const SMTP_PORT = 
+  Number(process.env.SMTP_PORT || 465); 
+
+export const SMTP_SECURE = 
+  process.env.SMTP_SECURE === "true"; 
+
+export const SMTP_USER = 
+  process.env.SMTP_USER || ""; 
+
+export const SMTP_PASS = 
+  process.env.SMTP_PASS || "";
