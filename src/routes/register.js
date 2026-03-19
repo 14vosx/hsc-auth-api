@@ -2,6 +2,7 @@
 import { registerHealthRoutes } from "./health.js";
 import { registerContentNewsRoutes } from "./content/news.js";
 import { registerContentSeasonsRoutes } from "./content/seasons.js";
+import { registerDevBootstrapSessionRoute } from "./auth/dev.bootstrap-session.js";
 import { registerAuthSessionRoute } from "./auth/session.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
@@ -45,6 +46,7 @@ export function registerAllRoutes(app, deps) {
 
   registerHealthRoutes(app, { corsMeta, getDbStatus });
   registerAuthSessionRoute(app, { resolveSessionAdmin });
+  registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady });
 
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {

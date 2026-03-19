@@ -4,6 +4,22 @@ import mysql from "mysql2/promise";
 export async function ensureSchema(dbConfig) {
   const connection = await mysql.createConnection(dbConfig);
 
+  async function columnExists(connection, tableName, columnName) {
+    const [rows] = await connection.execute(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.columns
+        WHERE table_schema = ?
+          AND table_name = ?
+          AND column_name = ?
+        LIMIT 1
+      `,
+      [process.env.DB_NAME, tableName, columnName],
+    );
+
+    return rows.length > 0;
+  }
+
   // schema_meta
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS schema_meta (
@@ -110,10 +126,14 @@ export async function ensureSchema(dbConfig) {
 
   // v5: add role column to users table
   if (schemaVersion < 5) {
-    await connection.execute(`
-      ALTER TABLE users
-      ADD COLUMN role ENUM('viewer','editor','admin') NOT NULL DEFAULT 'viewer'
-    `);
+    const hasRoleColumn = await columnExists(connection, "users", "role");
+
+    if (!hasRoleColumn) {
+      await connection.execute(`
+        ALTER TABLE users
+        ADD COLUMN role ENUM('viewer','editor','admin') NOT NULL DEFAULT 'viewer'
+      `);
+    }
 
     await connection.execute(
       `UPDATE schema_meta SET version = 5 WHERE version < 5`,
@@ -121,7 +141,7 @@ export async function ensureSchema(dbConfig) {
     schemaVersion = 5;
   }
 
-  // v6: create sessions
+  // v6: create or reconcile sessions
   if (schemaVersion < 6) {
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -139,6 +159,31 @@ export async function ensureSchema(dbConfig) {
           ON DELETE CASCADE
       )
     `);
+
+    const hasTokenHash = await columnExists(connection, "sessions", "token_hash");
+    const hasRevokedAt = await columnExists(connection, "sessions", "revoked_at");
+    const hasUpdatedAt = await columnExists(connection, "sessions", "updated_at");
+
+    if (!hasTokenHash) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN token_hash CHAR(64) NULL UNIQUE AFTER user_id
+      `);
+    }
+
+    if (!hasRevokedAt) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN revoked_at DATETIME NULL AFTER expires_at
+      `);
+    }
+
+    if (!hasUpdatedAt) {
+      await connection.execute(`
+        ALTER TABLE sessions
+        ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      `);
+    }
 
     await connection.execute(
       `UPDATE schema_meta SET version = 6 WHERE version < 6`,

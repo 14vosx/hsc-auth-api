@@ -53,3 +53,40 @@ export async function findActiveSessionByToken(dbConfig, rawToken) {
     await connection.end();
   }
 }
+
+export async function createSessionForUser(dbConfig, userId, ttlHours) {
+  const rawToken = crypto.randomUUID();
+  const tokenHash = hashSessionToken(rawToken);
+
+  const sessionId = crypto.randomUUID();
+  const connection = await mysql.createConnection(dbConfig);
+
+  try {
+    await connection.execute(
+      `
+        INSERT INTO sessions (
+          id,
+          user_id,
+          token_hash,
+          expires_at,
+          revoked_at
+        )
+        VALUES (
+          ?,
+          ?,
+          ?,
+          DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR),
+          NULL
+        )
+      `,
+      [sessionId, userId, tokenHash, ttlHours],
+    );
+
+    return {
+      sessionId,
+      rawToken,
+    };
+  } finally {
+    await connection.end();
+  }
+}
