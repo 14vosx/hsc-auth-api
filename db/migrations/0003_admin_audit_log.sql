@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   CONSTRAINT fk_admin_audit_log_user
     FOREIGN KEY (user_id) REFERENCES users(id)
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
