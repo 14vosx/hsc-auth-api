@@ -7,6 +7,10 @@ import { registerAuthSessionRoute } from "./auth/session.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
 
+import { registerAdminUsersListRoute } from "./admin/users.list.js";
+import { registerAdminUsersCreateRoute } from "./admin/users.create.js";
+import { registerAdminUsersUpdateRoute } from "./admin/users.update.js";
+
 import { registerAdminNewsCreateRoute } from "./admin/news.create.js";
 import { registerAdminNewsListRoute } from "./admin/news.list.js";
 import { registerAdminNewsPublishRoute } from "./admin/news.publish.js";
@@ -62,6 +66,24 @@ export function registerAllRoutes(app, deps) {
   });
 
   registerAdminSchemaRoute(app, { requireAdmin, dbConfig, getDbReady });
+
+  registerAdminUsersListRoute(app, { requireAdmin, dbConfig, getDbReady });
+
+  registerAdminUsersCreateRoute(app, {
+    requireAdmin,
+    dbConfig,
+    getDbReady,
+    runInTx,
+    insertAdminAudit,
+  });
+
+  registerAdminUsersUpdateRoute(app, {
+    requireAdmin,
+    dbConfig,
+    getDbReady,
+    runInTx,
+    insertAdminAudit,
+  });
 
   registerAdminNewsCreateRoute(app, {
     requireAdmin,
