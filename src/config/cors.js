@@ -28,7 +28,7 @@ export function buildCors() {
       const clean = String(origin).trim().replace(/\/$/, "");
       cb(null, allowedOriginsSet.has(clean));
     },
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400,
