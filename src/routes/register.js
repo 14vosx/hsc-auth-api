@@ -12,6 +12,7 @@ import { registerAdminUsersCreateRoute } from "./admin/users.create.js";
 import { registerAdminUsersUpdateRoute } from "./admin/users.update.js";
 
 import { registerAdminNewsCreateRoute } from "./admin/news.create.js";
+import { registerAdminNewsGetRoute } from "./admin/news.get.js";
 import { registerAdminNewsListRoute } from "./admin/news.list.js";
 import { registerAdminNewsPublishRoute } from "./admin/news.publish.js";
 import { registerAdminNewsUpdateRoute } from "./admin/news.update.js";
@@ -93,6 +94,7 @@ export function registerAllRoutes(app, deps) {
     runInTx,
     insertAdminAudit,
   });
+  registerAdminNewsGetRoute(app, { requireAdmin, dbConfig, getDbReady });
   registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbReady });
   registerAdminNewsPublishRoute(app, {
     requireAdmin,
