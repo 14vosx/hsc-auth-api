@@ -19,6 +19,7 @@ import { registerAdminNewsUpdateRoute } from "./admin/news.update.js";
 import { registerAdminNewsUnpublishRoute } from "./admin/news.unpublish.js";
 import { registerAdminNewsDeleteRoute } from "./admin/news.delete.js";
 
+import { registerAdminSeasonsReadRoutes } from "./admin/seasons.read.js";
 import { registerAdminSeasonsWriteRoutes } from "./admin/seasons.write.js";
 import { registerAdminSeasonsActionRoutes } from "./admin/seasons.actions.js";
 import { registerAuthRequestMagicLinkRoute } from "./auth/request-magic-link.js";
@@ -124,6 +125,15 @@ export function registerAllRoutes(app, deps) {
     getDbReady,
     runInTx,
     insertAdminAudit,
+  });
+
+  registerAdminSeasonsReadRoutes(app, {
+    requireAdmin,
+    getDbReady,
+    seasonsRepo,
+    normalizeSlug,
+    sendBadRequest,
+    sendNotFound,
   });
 
   registerAdminSeasonsWriteRoutes(app, {

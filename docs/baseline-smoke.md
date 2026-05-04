@@ -17,4 +17,5 @@ Smoke:
 - GET `/content/news` => 200, `{ ok, count, items }`
 - GET `/content/seasons` => 200, `{ ok, generatedAt, data }`
 - GET `/admin/schema` (com `X-Admin-Key`) => 200, `{ ok, version, tables }`
+- GET `/admin/seasons` (com `X-Admin-Key`) => 200, `{ ok, count, items }`
 - CORS: header `Access-Control-Allow-Origin: http://localhost:5173`

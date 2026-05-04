@@ -15,5 +15,8 @@ curl -fsS "$BASE/content/seasons" | cat; echo; echo
 echo "== /admin/schema =="
 curl -fsS "$BASE/admin/schema" -H "X-Admin-Key: ${ADMIN_KEY}" | cat; echo; echo
 
+echo "== /admin/seasons =="
+curl -fsS "$BASE/admin/seasons" -H "X-Admin-Key: ${ADMIN_KEY}" | cat; echo; echo
+
 echo "== CORS headers (health) =="
 curl -sS -D - -o /dev/null "$BASE/health" -H "Origin: ${ALLOWED_ORIGIN}" | sed -n '1,30p'
