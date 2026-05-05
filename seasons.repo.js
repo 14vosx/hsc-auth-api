@@ -59,6 +59,31 @@ export function createSeasonsRepo(dbConfig) {
     });
   }
 
+  async function findSeasonDateOverlap({ startAt, endAt, excludeSlug = null }) {
+    return withConn(async (conn) => {
+      const where = ["start_at <= ?", "end_at >= ?"];
+      const vals = [endAt, startAt];
+
+      if (excludeSlug) {
+        where.push("slug <> ?");
+        vals.push(excludeSlug);
+      }
+
+      const [rows] = await conn.execute(
+        `
+        SELECT id, slug, name, status, start_at, end_at
+        FROM seasons
+        WHERE ${where.join(" AND ")}
+        ORDER BY start_at ASC, id ASC
+        LIMIT 1
+        `,
+        vals,
+      );
+
+      return rows[0] ?? null;
+    });
+  }
+
   async function insertSeason({ slug, name, description, startAt, endAt, audit = null }) {
     return runInTx(dbConfig, async (conn) => {
       const [result] = await conn.execute(
@@ -223,6 +248,7 @@ export function createSeasonsRepo(dbConfig) {
     listSeasons,
     getSeasonBySlug,
     getActiveSeason,
+    findSeasonDateOverlap,
     insertSeason,
     patchSeasonBySlug,
     setSeasonClosed,
