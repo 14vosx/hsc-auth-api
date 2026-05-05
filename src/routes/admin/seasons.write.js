@@ -29,6 +29,12 @@ export function registerAdminSeasonsWriteRoutes(app, {
     }
 
     try {
+      const overlap = await seasonsRepo.findSeasonDateOverlap({
+        startAt: v.startAt,
+        endAt: v.endAt,
+      });
+      if (overlap) return sendConflict(res, "season_date_overlap");
+
       const id = await seasonsRepo.insertSeason({
         slug: v.slug,
         name: v.name,
@@ -80,6 +86,15 @@ export function registerAdminSeasonsWriteRoutes(app, {
           v.error,
           v.field ? { field: v.field } : undefined,
         );
+
+      const startAt = v.patch.startAt ?? current.start_at;
+      const endAt = v.patch.endAt ?? current.end_at;
+      const overlap = await seasonsRepo.findSeasonDateOverlap({
+        startAt,
+        endAt,
+        excludeSlug: slug,
+      });
+      if (overlap) return sendConflict(res, "season_date_overlap");
 
       const affected = await seasonsRepo.patchSeasonBySlug(slug, v.patch, {
         userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
