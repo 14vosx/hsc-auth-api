@@ -17,9 +17,9 @@ export function registerAdminSeasonsWriteRoutes(app, {
     if (!getDbReady())
       return res.status(503).json({ ok: false, error: "db_not_ready" });
 
-    const { slug, name, description, start_at, end_at } = req.body || {};
+    const { slug, name, description, start_at, end_at, cover_image_url } = req.body || {};
 
-    const v = validateSeasonInput({ slug, name, start_at, end_at });
+    const v = validateSeasonInput({ slug, name, start_at, end_at, cover_image_url });
     if (!v.ok) {
       return sendBadRequest(
         res,
@@ -39,6 +39,7 @@ export function registerAdminSeasonsWriteRoutes(app, {
         slug: v.slug,
         name: v.name,
         description: description != null ? String(description).trim() : null,
+        coverImageUrl: v.coverImageUrl,
         startAt: v.startAt,
         endAt: v.endAt,
         audit: {

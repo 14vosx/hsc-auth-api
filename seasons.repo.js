@@ -8,6 +8,13 @@ import { runInTx, insertAdminAudit } from "./src/db/adminTx.js";
  */
 
 export function createSeasonsRepo(dbConfig) {
+  function normalizeCoverImageUrl(value) {
+    if (value == null) return null;
+
+    const clean = String(value).trim();
+    return clean ? clean : null;
+  }
+
   async function withConn(fn) {
     const conn = await mysql.createConnection(dbConfig);
     try {
@@ -21,7 +28,7 @@ export function createSeasonsRepo(dbConfig) {
     return withConn(async (conn) => {
       const [rows] = await conn.execute(
         `
-        SELECT id, slug, name, description, start_at, end_at, status, created_at, updated_at
+        SELECT id, slug, name, description, cover_image_url, start_at, end_at, status, created_at, updated_at
         FROM seasons
         ORDER BY start_at DESC, id DESC
         `,
@@ -34,7 +41,7 @@ export function createSeasonsRepo(dbConfig) {
     return withConn(async (conn) => {
       const [rows] = await conn.execute(
         `
-        SELECT id, slug, name, description, start_at, end_at, status, created_at, updated_at
+        SELECT id, slug, name, description, cover_image_url, start_at, end_at, status, created_at, updated_at
         FROM seasons
         WHERE slug = ?
         LIMIT 1
@@ -49,7 +56,7 @@ export function createSeasonsRepo(dbConfig) {
     return withConn(async (conn) => {
       const [rows] = await conn.execute(
         `
-        SELECT id, slug, name, description, start_at, end_at, status, created_at, updated_at
+        SELECT id, slug, name, description, cover_image_url, start_at, end_at, status, created_at, updated_at
         FROM seasons
         WHERE status = 'active'
         LIMIT 1
@@ -84,14 +91,29 @@ export function createSeasonsRepo(dbConfig) {
     });
   }
 
-  async function insertSeason({ slug, name, description, startAt, endAt, audit = null }) {
+  async function insertSeason({
+    slug,
+    name,
+    description,
+    coverImageUrl = null,
+    startAt,
+    endAt,
+    audit = null,
+  }) {
     return runInTx(dbConfig, async (conn) => {
       const [result] = await conn.execute(
         `
-        INSERT INTO seasons (slug, name, description, start_at, end_at, status)
-        VALUES (?, ?, ?, ?, ?, 'draft')
+        INSERT INTO seasons (slug, name, description, cover_image_url, start_at, end_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'draft')
         `,
-        [slug, name, description ?? null, startAt, endAt],
+        [
+          slug,
+          name,
+          description ?? null,
+          normalizeCoverImageUrl(coverImageUrl),
+          startAt,
+          endAt,
+        ],
       );
 
       if (audit) {
@@ -113,6 +135,10 @@ export function createSeasonsRepo(dbConfig) {
     if (patch.description !== undefined) {
       sets.push("description = ?");
       vals.push(patch.description);
+    }
+    if (Object.hasOwn(patch, "coverImageUrl")) {
+      sets.push("cover_image_url = ?");
+      vals.push(normalizeCoverImageUrl(patch.coverImageUrl));
     }
     if (patch.startAt != null) {
       sets.push("start_at = ?");
