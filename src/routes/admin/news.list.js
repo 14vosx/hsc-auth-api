@@ -11,7 +11,7 @@ export function registerAdminNewsListRoute(app, { requireAdmin, dbConfig, getDbR
       const connection = await mysql.createConnection(dbConfig);
 
       const [rows] = await connection.execute(`
-        SELECT id, slug, title, status, created_at, updated_at
+        SELECT id, slug, title, excerpt, image_url, status, created_at, updated_at
         FROM news
         ORDER BY created_at DESC
         LIMIT 20

@@ -18,7 +18,8 @@ export function registerAdminNewsUpdateRoute(app, {
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    const { slug, title, excerpt, content, image_url } = req.body || {};
+    const body = req.body || {};
+    const { slug, title, excerpt, content, image_url } = body;
 
     const updates = [];
     const params = [];
@@ -47,9 +48,9 @@ export function registerAdminNewsUpdateRoute(app, {
       updates.push("content = ?");
       params.push(c);
     }
-    if (image_url != null) {
+    if (Object.prototype.hasOwnProperty.call(body, "image_url")) {
       updates.push("image_url = ?");
-      params.push(String(image_url).trim() || null);
+      params.push(image_url == null ? null : String(image_url).trim() || null);
     }
 
     if (!updates.length) {
