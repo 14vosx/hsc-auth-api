@@ -2,7 +2,14 @@
 import { normalizeSlug } from "../../utils/slug.js";
 import { parseUtcIsoToDatetime } from "../../utils/datetime.js";
 
-export function validateSeasonInput({ slug, name, start_at, end_at }) {
+function normalizeCoverImageUrl(value) {
+  if (value == null) return null;
+
+  const clean = String(value).trim();
+  return clean ? clean : null;
+}
+
+export function validateSeasonInput({ slug, name, start_at, end_at, cover_image_url }) {
   const cleanSlug = normalizeSlug(slug);
   if (!cleanSlug) return { ok: false, error: "invalid_slug" };
   if (cleanSlug.length > 64) return { ok: false, error: "slug_too_long" };
@@ -28,6 +35,7 @@ export function validateSeasonInput({ slug, name, start_at, end_at }) {
     name: cleanName,
     startAt: start.datetime,
     endAt: end.datetime,
+    coverImageUrl: normalizeCoverImageUrl(cover_image_url),
   };
 }
 
@@ -43,6 +51,10 @@ export function validateSeasonPatch(current, patch) {
   if (patch.description !== undefined) {
     out.description =
       patch.description == null ? null : String(patch.description).trim();
+  }
+
+  if (Object.hasOwn(patch, "cover_image_url")) {
+    out.coverImageUrl = normalizeCoverImageUrl(patch.cover_image_url);
   }
 
   let startAt = current.start_at;
