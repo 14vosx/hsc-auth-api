@@ -18,6 +18,7 @@ import { registerAdminNewsPublishRoute } from "./admin/news.publish.js";
 import { registerAdminNewsUpdateRoute } from "./admin/news.update.js";
 import { registerAdminNewsUnpublishRoute } from "./admin/news.unpublish.js";
 import { registerAdminNewsDeleteRoute } from "./admin/news.delete.js";
+import { registerAdminUploadsCreateRoute } from "./admin/uploads.create.js";
 
 import { registerAdminSeasonsReadRoutes } from "./admin/seasons.read.js";
 import { registerAdminSeasonsWriteRoutes } from "./admin/seasons.write.js";
@@ -31,6 +32,7 @@ export function registerAllRoutes(app, deps) {
     corsMeta,
     getDbStatus,
     getDbReady,
+    uploadsConfig,
 
     dbConfig,
     seasonsRepo,
@@ -68,6 +70,14 @@ export function registerAllRoutes(app, deps) {
   });
 
   registerAdminSchemaRoute(app, { requireAdmin, dbConfig, getDbReady });
+  registerAdminUploadsCreateRoute(app, {
+    requireAdmin,
+    getDbReady,
+    dbConfig,
+    runInTx,
+    insertAdminAudit,
+    uploadsConfig,
+  });
 
   registerAdminUsersListRoute(app, { requireAdmin, dbConfig, getDbReady });
 

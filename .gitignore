@@ -15,3 +15,7 @@ index.js.bak.*
 
 # HSC: templates de env DEV podem ser versionados
 !.env.local.example
+
+# Local uploaded files
+var/uploads/
+var/uploads/*
