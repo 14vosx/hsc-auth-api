@@ -25,6 +25,7 @@ import { registerAdminSeasonsWriteRoutes } from "./admin/seasons.write.js";
 import { registerAdminSeasonsActionRoutes } from "./admin/seasons.actions.js";
 import { registerAuthRequestMagicLinkRoute } from "./auth/request-magic-link.js";
 import { registerAuthConsumeMagicLinkRoute } from "./auth/consume-magic-link.js";
+import { registerInternalSteamProfilesResolveRoute } from "./internal/steam/profiles.resolve.js";
 
 
 export function registerAllRoutes(app, deps) {
@@ -36,11 +37,13 @@ export function registerAllRoutes(app, deps) {
 
     dbConfig,
     seasonsRepo,
+    steamProfilesService,
     runInTx,
     insertAdminAudit,
     resolveSessionAdmin,
     requireAdmin,
     adminKey,
+    internalApiKey,
 
     // utils/helpers
     sendPublic,
@@ -67,6 +70,13 @@ export function registerAllRoutes(app, deps) {
     sendNotFound,
     normalizeSlug,
     getDbReady,
+  });
+
+  registerInternalSteamProfilesResolveRoute(app, {
+    getDbReady,
+    steamProfilesService,
+    internalApiKey,
+    sendBadRequest,
   });
 
   registerAdminSchemaRoute(app, { requireAdmin, dbConfig, getDbReady });
