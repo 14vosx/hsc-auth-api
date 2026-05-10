@@ -10,7 +10,7 @@ funcional e sem criacao de conta ou sessao player.
 
 ## 2. Estado atual integrado
 
-Estado esperado apos as PRs #53 a #61:
+Estado esperado apos as PRs #53 a #64:
 
 - #53: plano local de Player Auth Steam-first.
 - #54: schema de Player Auth com contas, identidades Steam e sessoes player.
@@ -20,11 +20,13 @@ Estado esperado apos as PRs #53 a #61:
 - #58: endpoint autenticado `GET /player/bunker/summary`.
 - #60: script local de smoke de rotas Player Auth/Bunker skeleton.
 - #61: verificacao do callback Steam OpenID por Direct Verification.
+- #64: emissao de sessao player apos callback Steam verificado.
 
 Com `PLAYER_STEAM_AUTH_ENABLED=true`, o Steam Auth agora valida callback OpenID
-via Direct Verification contra o endpoint OpenID da Steam. Mesmo assim, ainda
-nao cria conta, nao cria identidade player, nao cria sessao e nao emite
-`hsc_player_session`.
+via Direct Verification contra o endpoint OpenID da Steam. Quando o callback e
+verificado, a API resolve ou cria a conta player, cria uma row em
+`player_sessions`, seta o cookie `hsc_player_session` e retorna
+`authenticated: true`.
 
 ## 3. Ambiente local
 
@@ -160,17 +162,29 @@ Esperado:
 
 Um callback Steam real verificado deve retornar:
 
-- HTTP `501`.
-- JSON com `ok: false`.
-- `error: "steam_session_not_implemented"`.
+- HTTP `200`.
+- JSON com `ok: true`.
+- `authenticated: true`.
 - `verified: true`.
 - `steamid64` preenchido.
+- `player.playerAccountId` preenchido.
+- `session.issued: true`.
+- Header `Set-Cookie` com `hsc_player_session=...`.
 
-Isso significa que a identidade Steam foi verificada, mas a emissao de sessao
-player ainda nao foi implementada. Nao adicione exemplos completos de callback
-real com assinatura Steam neste documento; a query e longa e deve ser tratada
-como material sensivel de fluxo. O callback real deve ser testado via
-navegador/Steam em uma etapa futura controlada.
+O JSON nao deve expor token bruto, cookie, `Set-Cookie` ou `token_hash`.
+Nao adicione exemplos completos de callback real com assinatura Steam neste
+documento; a query e longa e deve ser tratada como material sensivel de fluxo.
+O callback real deve ser testado via navegador/Steam em uma etapa futura
+controlada.
+
+Com um cookie player valido obtido no callback:
+
+- `GET /player/me` deve retornar HTTP `200` com `authenticated: true`.
+- `GET /player/bunker/summary` deve retornar HTTP `200` com o skeleton
+  autenticado do Bunker.
+
+Sem cookie, `GET /player/me` e `GET /player/bunker/summary` continuam
+retornando HTTP `401`.
 
 ## 6. Guardrails
 
@@ -178,18 +192,20 @@ navegador/Steam em uma etapa futura controlada.
 - Nao expor cookies reais em terminal compartilhado, docs, PRs ou logs.
 - Nao documentar secrets nem valores reais de `.env`.
 - Nao assumir login Steam real neste skeleton.
+- Nao colar `Set-Cookie` real em PRs, docs ou logs.
 - Nao colar callback query real completa em PRs, docs ou logs.
-- Nao tratar `steam_session_not_implemented` como login concluido.
-- Nao assumir emissao de `hsc_player_session` ate uma PR propria de sessao.
 - Nao criar usuario, identidade ou sessao manualmente em DB de producao.
 - Nao alterar Admin Auth como parte deste smoke.
 - Nao usar `hsc_admin_session` para validar Player Auth.
+- Nao assumir Portal UI pronta.
+- Nao assumir redirect final para o Portal enquanto esse contrato nao existir.
 - Nao rodar deploy, release, rollback ou smoke de producao.
 
 ## 7. Proxima PR possivel
 
 Proximas fatias possiveis:
 
-- `feat(player-auth): resolve or create player account from verified SteamID`
-- `feat(player-auth): issue player session after verified Steam callback`
-- `test(player-auth): extend local route smoke for enabled OpenID mode`
+- `test(player-auth): extend local smoke for authenticated session`
+- `feat(player-auth): add player logout route`
+- `feat(player-auth): add Portal callback redirect contract`
+- `feat(player-bunker): connect authenticated summary to real player stats contract`
