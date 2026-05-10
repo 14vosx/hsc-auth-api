@@ -66,7 +66,7 @@ export function registerAllRoutes(app, deps) {
   registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady });
   registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
   registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
-  registerPlayerSteamAuthRoutes(app, { getDbReady });
+  registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig });
   registerPlayerMeRoute(app, { requirePlayer });
   registerPlayerBunkerSummaryRoute(app, { requirePlayer });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
