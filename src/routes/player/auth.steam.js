@@ -1,11 +1,14 @@
 // src/routes/player/auth.steam.js
 import { PLAYER_STEAM_AUTH_ENABLED } from "../../config/playerSteamAuth.js";
+import { PLAYER_SESSION_TTL_HOURS } from "../../config/playerAuth.js";
 import { resolveOrCreatePlayerAccountFromSteamId } from "../../db/playerAccounts.js";
+import { createPlayerSessionForAccount } from "../../db/playerSessions.js";
 import {
   buildSteamAuthUnavailablePayload,
   buildSteamOpenIdStartUrl,
   verifySteamOpenIdCallback,
 } from "../../services/player-auth/steamAuth.js";
+import { buildPlayerSessionCookie } from "../../utils/playerSessionCookie.js";
 
 export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
   app.get("/player/auth/steam/start", async (req, res) => {
@@ -58,12 +61,34 @@ export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
       });
     }
 
-    return res.status(501).json({
-      ok: false,
-      error: "steam_session_not_implemented",
+    let session;
+    try {
+      session = await createPlayerSessionForAccount(
+        dbConfig,
+        accountResult.playerAccountId,
+        PLAYER_SESSION_TTL_HOURS,
+      );
+    } catch {
+      return res
+        .status(500)
+        .json({ ok: false, error: "player_session_issue_failed" });
+    }
+
+    res.setHeader("Set-Cookie", buildPlayerSessionCookie(session.rawToken));
+
+    return res.status(200).json({
+      ok: true,
+      authenticated: true,
       verified: true,
       steamid64: result.steamid64,
-      playerAccountId: accountResult.playerAccountId,
+      player: {
+        playerAccountId: accountResult.playerAccountId,
+        steamid64: result.steamid64,
+        displayName: accountResult.displayName ?? null,
+      },
+      session: {
+        issued: true,
+      },
       accountCreated: accountResult.accountCreated,
       identityCreated: accountResult.identityCreated,
     });
