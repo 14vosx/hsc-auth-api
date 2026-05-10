@@ -4,6 +4,7 @@ import { registerContentNewsRoutes } from "./content/news.js";
 import { registerContentSeasonsRoutes } from "./content/seasons.js";
 import { registerDevBootstrapSessionRoute } from "./auth/dev.bootstrap-session.js";
 import { registerAuthSessionRoute } from "./auth/session.js";
+import { registerPlayerSteamAuthRoutes } from "./player/auth.steam.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
 
@@ -62,6 +63,7 @@ export function registerAllRoutes(app, deps) {
   registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady });
   registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
   registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
+  registerPlayerSteamAuthRoutes(app, { getDbReady });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {
     seasonsRepo,
