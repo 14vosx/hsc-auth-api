@@ -5,6 +5,7 @@ import { registerContentSeasonsRoutes } from "./content/seasons.js";
 import { registerDevBootstrapSessionRoute } from "./auth/dev.bootstrap-session.js";
 import { registerAuthSessionRoute } from "./auth/session.js";
 import { registerPlayerSteamAuthRoutes } from "./player/auth.steam.js";
+import { registerPlayerMeRoute } from "./player/me.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
 
@@ -43,6 +44,7 @@ export function registerAllRoutes(app, deps) {
     insertAdminAudit,
     resolveSessionAdmin,
     requireAdmin,
+    requirePlayer,
     adminKey,
     internalApiKey,
 
@@ -64,6 +66,7 @@ export function registerAllRoutes(app, deps) {
   registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
   registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
   registerPlayerSteamAuthRoutes(app, { getDbReady });
+  registerPlayerMeRoute(app, { requirePlayer });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {
     seasonsRepo,
