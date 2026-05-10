@@ -2,6 +2,7 @@
 import { buildDbConfig } from "../config/db.js";
 import { createSeasonsRepo } from "../../seasons.repo.js";
 import { createAdminAuth } from "../middlewares/adminAuth.js";
+import { createPlayerAuth } from "../middlewares/playerAuth.js";
 import { runInTx, insertAdminAudit } from "../db/adminTx.js";
 import { createSteamProfilesRepo } from "../services/steam/profiles.repo.js";
 import { createSteamProfilesService } from "../services/steam/profiles.js";
@@ -48,6 +49,7 @@ export function createAppContext() {
     adminKey,
     dbConfig,
   });
+  const { resolvePlayer, requirePlayer } = createPlayerAuth({ dbConfig });
 
   return {
     port,
@@ -64,6 +66,8 @@ export function createAppContext() {
       resolveSessionAdmin,
       resolveAdmin,
       requireAdmin,
+      resolvePlayer,
+      requirePlayer,
       adminKey,
       internalApiKey,
 
