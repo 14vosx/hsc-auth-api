@@ -3,7 +3,7 @@ import { PLAYER_STEAM_AUTH_ENABLED } from "../../config/playerSteamAuth.js";
 import {
   buildSteamAuthUnavailablePayload,
   buildSteamOpenIdStartUrl,
-  readSteamCallbackQuery,
+  verifySteamOpenIdCallback,
 } from "../../services/player-auth/steamAuth.js";
 
 export function registerPlayerSteamAuthRoutes(app, { getDbReady }) {
@@ -28,10 +28,19 @@ export function registerPlayerSteamAuthRoutes(app, { getDbReady }) {
       return res.status(501).json(buildSteamAuthUnavailablePayload());
     }
 
-    readSteamCallbackQuery(req.query);
+    const result = await verifySteamOpenIdCallback(req.query);
 
-    return res
-      .status(501)
-      .json({ ok: false, error: "steam_callback_not_implemented" });
+    if (!result.ok) {
+      return res
+        .status(400)
+        .json({ ok: false, error: result.error || "steam_openid_invalid" });
+    }
+
+    return res.status(501).json({
+      ok: false,
+      error: "steam_session_not_implemented",
+      verified: true,
+      steamid64: result.steamid64,
+    });
   });
 }
