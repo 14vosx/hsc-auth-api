@@ -7,6 +7,7 @@ import { registerAuthSessionRoute } from "./auth/session.js";
 import { registerPlayerSteamAuthRoutes } from "./player/auth.steam.js";
 import { registerPlayerMeRoute } from "./player/me.js";
 import { registerPlayerBunkerSummaryRoute } from "./player/bunker.summary.js";
+import { registerPlayerLogoutRoute } from "./player/logout.js";
 
 import { registerAdminSchemaRoute } from "./admin/schema.js";
 
@@ -67,6 +68,7 @@ export function registerAllRoutes(app, deps) {
   registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
   registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
   registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig });
+  registerPlayerLogoutRoute(app, { dbConfig });
   registerPlayerMeRoute(app, { requirePlayer });
   registerPlayerBunkerSummaryRoute(app, { requirePlayer });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
