@@ -171,8 +171,15 @@ Esperado:
 
 Um callback Steam real verificado deve retornar:
 
-- HTTP `200`.
-- JSON com `ok: true`.
+- HTTP `200` com JSON quando `PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED` estiver
+  ausente ou diferente de `true`.
+- Redirect para `PLAYER_AUTH_SUCCESS_REDIRECT_URL` quando
+  `PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED=true`.
+- Cookie `hsc_player_session` emitido via `Set-Cookie`.
+
+No fallback JSON, o corpo deve conter:
+
+- `ok: true`.
 - `authenticated: true`.
 - `verified: true`.
 - `steamid64` preenchido.
@@ -180,7 +187,12 @@ Um callback Steam real verificado deve retornar:
 - `session.issued: true`.
 - Header `Set-Cookie` com `hsc_player_session=...`.
 
-O JSON nao deve expor token bruto, cookie, `Set-Cookie` ou `token_hash`.
+O JSON e a URL de redirect nao devem expor token bruto, cookie, `Set-Cookie`,
+`token_hash`, Steam callback query completa ou dados sensiveis. A URL de
+redirect vem apenas de env/config, nunca de `req.query`; os defaults sao
+relativos (`/portal/cs2-next/bunker` e
+`/portal/cs2-next/login?error=steam_auth_failed`) para reduzir risco de open
+redirect.
 Nao adicione exemplos completos de callback real com assinatura Steam neste
 documento; a query e longa e deve ser tratada como material sensivel de fluxo.
 O callback real deve ser testado via navegador/Steam em uma etapa futura
@@ -267,7 +279,8 @@ O JSON de logout nao deve expor token bruto, cookie, `Set-Cookie` ou
 - Nao rodar o smoke autenticado contra producao.
 - Garantir que `BASE_URL` e DB sejam locais antes de rodar smoke autenticado.
 - Nao assumir Portal UI pronta.
-- Nao assumir redirect final para o Portal enquanto esse contrato nao existir.
+- Nao assumir redirect final para o Portal sem
+  `PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED=true`.
 - Nao rodar deploy, release, rollback ou smoke de producao.
 
 ## 9. Proxima PR possivel
