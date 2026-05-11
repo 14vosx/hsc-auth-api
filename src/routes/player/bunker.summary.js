@@ -20,15 +20,15 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
           displayName: player.displayName ?? null,
         },
         bunker: {
-          status: "skeleton",
+          status: player.steamid64 ? "ready" : "unavailable",
           seasonFirst: true,
           statsAvailable: false,
         },
         currentSeason: null,
         lifetime: null,
         notes: [
-          "bunker_summary_skeleton",
-          "stats_contract_not_connected",
+          "real_player_identity_connected",
+          "stats_source_pending",
         ],
       },
     });
