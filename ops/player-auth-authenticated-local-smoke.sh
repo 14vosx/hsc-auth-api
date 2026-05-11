@@ -248,6 +248,22 @@ assert_body_contains '"ok":true' "GET /player/bunker/summary authenticated"
 assert_body_contains '"status":"skeleton"' "GET /player/bunker/summary authenticated"
 assert_body_contains "$TEST_STEAMID64" "GET /player/bunker/summary authenticated"
 
+echo "== /player/auth/logout =="
+request_with_player_cookie "POST" "/player/auth/logout"
+assert_status "200" "POST /player/auth/logout"
+assert_body_contains '"ok":true' "POST /player/auth/logout"
+assert_body_contains '"loggedOut":true' "POST /player/auth/logout"
+
+echo "== /player/me after logout with previous cookie =="
+request_with_player_cookie "GET" "/player/me"
+assert_status "401" "GET /player/me after logout with previous cookie"
+assert_body_contains "Unauthorized" "GET /player/me after logout with previous cookie"
+
+echo "== /player/bunker/summary after logout with previous cookie =="
+request_with_player_cookie "GET" "/player/bunker/summary"
+assert_status "401" "GET /player/bunker/summary after logout with previous cookie"
+assert_body_contains "Unauthorized" "GET /player/bunker/summary after logout with previous cookie"
+
 echo "== /player/me unauthenticated =="
 request "GET" "/player/me"
 assert_status "401" "GET /player/me unauthenticated"
@@ -260,4 +276,4 @@ assert_body_contains "Unauthorized" "GET /player/bunker/summary unauthenticated"
 
 unset RAW_TOKEN
 
-echo "✅ Player Auth authenticated local smoke passed"
+echo "✅ Player Auth authenticated local smoke with logout passed"
