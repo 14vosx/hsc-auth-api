@@ -252,6 +252,7 @@ assert_status "200" "GET /player/bunker/summary"
 assert_body_contains '"statsAvailable":true' "GET /player/bunker/summary"
 assert_body_contains "season_player_artifact_connected" "GET /player/bunker/summary"
 assert_body_contains '"seasonPlayer"' "GET /player/bunker/summary"
+assert_body_contains '"competitiveProfile"' "GET /player/bunker/summary"
 assert_body_contains "$TEST_STEAMID64" "GET /player/bunker/summary"
 
 unset PLAYER_COOKIE_HEADER

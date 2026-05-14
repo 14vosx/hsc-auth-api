@@ -2,7 +2,10 @@
 import {
   PLAYER_BUNKER_ACTIVE_SEASON_SLUG,
   PLAYER_BUNKER_ARTIFACT_ROOT,
+  PLAYER_BUNKER_STATIC_API_BASE_URL,
+  PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
 } from "../../config/playerBunker.js";
+import { readCompetitiveProfile } from "../../services/player-bunker/competitiveProfile.js";
 import { readSeasonPlayerArtifact } from "../../services/player-bunker/seasonPlayerArtifact.js";
 
 const SENSITIVE_ARTIFACT_KEY_RE = /(token|cookie|hash)/i;
@@ -23,13 +26,39 @@ function sanitizeArtifact(value) {
   );
 }
 
-function buildFallbackData({ player, note }) {
+function buildPlayerData({ player, competitiveProfile }) {
   return {
-    player: {
-      playerAccountId: player.playerAccountId ?? null,
-      steamid64: player.steamid64 ?? null,
-      displayName: player.displayName ?? null,
-    },
+    playerAccountId: player.playerAccountId ?? null,
+    steamid64: player.steamid64 ?? null,
+    displayName: player.displayName ?? null,
+    ...(competitiveProfile?.avatarMedium
+      ? { avatarMedium: competitiveProfile.avatarMedium }
+      : {}),
+    ...(competitiveProfile?.steamProfileUrl
+      ? { steamProfileUrl: competitiveProfile.steamProfileUrl }
+      : {}),
+  };
+}
+
+function buildCompetitiveProfileNotes({ competitiveProfileResult }) {
+  if (competitiveProfileResult.ok) {
+    return ["competitive_profile_connected"];
+  }
+
+  if (competitiveProfileResult.reason !== "not_configured") {
+    return ["competitive_profile_unavailable"];
+  }
+
+  return [];
+}
+
+function buildFallbackData({ player, note, competitiveProfileResult }) {
+  const competitiveProfile = competitiveProfileResult.ok
+    ? competitiveProfileResult.profile
+    : null;
+
+  return {
+    player: buildPlayerData({ player, competitiveProfile }),
     bunker: {
       status: player.steamid64 ? "ready" : "unavailable",
       seasonFirst: true,
@@ -37,22 +66,23 @@ function buildFallbackData({ player, note }) {
     },
     currentSeason: null,
     lifetime: null,
+    competitiveProfile,
     notes: [
       "real_player_identity_connected",
       note,
+      ...buildCompetitiveProfileNotes({ competitiveProfileResult }),
     ],
   };
 }
 
-function buildReadyData({ player, artifact }) {
+function buildReadyData({ player, artifact, competitiveProfileResult }) {
   const seasonPlayer = sanitizeArtifact(artifact);
+  const competitiveProfile = competitiveProfileResult.ok
+    ? competitiveProfileResult.profile
+    : null;
 
   return {
-    player: {
-      playerAccountId: player.playerAccountId ?? null,
-      steamid64: player.steamid64 ?? null,
-      displayName: player.displayName ?? null,
-    },
+    player: buildPlayerData({ player, competitiveProfile }),
     bunker: {
       status: "ready",
       seasonFirst: true,
@@ -61,9 +91,11 @@ function buildReadyData({ player, artifact }) {
     currentSeason: seasonPlayer?.season ?? null,
     lifetime: null,
     seasonPlayer,
+    competitiveProfile,
     notes: [
       "real_player_identity_connected",
       "season_player_artifact_connected",
+      ...buildCompetitiveProfileNotes({ competitiveProfileResult }),
     ],
   };
 }
@@ -78,6 +110,11 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
 
     const player = req.player ?? {};
     let data;
+    const competitiveProfileResult = await readCompetitiveProfile({
+      baseUrl: PLAYER_BUNKER_STATIC_API_BASE_URL,
+      timeoutMs: PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
+      steamid64: player.steamid64,
+    });
 
     try {
       const result = await readSeasonPlayerArtifact({
@@ -90,22 +127,26 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
         data = buildReadyData({
           player,
           artifact: result.artifact,
+          competitiveProfileResult,
         });
       } else if (result.reason === "not_configured" || result.reason === "not_found") {
         data = buildFallbackData({
           player,
           note: result.reason,
+          competitiveProfileResult,
         });
       } else {
         data = buildFallbackData({
           player,
           note: "season_player_artifact_unavailable",
+          competitiveProfileResult,
         });
       }
     } catch {
       data = buildFallbackData({
         player,
         note: "season_player_artifact_unavailable",
+        competitiveProfileResult,
       });
     }
 
