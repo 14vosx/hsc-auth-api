@@ -70,7 +70,7 @@ export function registerAllRoutes(app, deps) {
   registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig });
   registerPlayerLogoutRoute(app, { dbConfig });
   registerPlayerMeRoute(app, { requirePlayer });
-  registerPlayerBunkerSummaryRoute(app, { requirePlayer });
+  registerPlayerBunkerSummaryRoute(app, { requirePlayer, seasonsRepo });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {
     seasonsRepo,

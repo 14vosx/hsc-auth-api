@@ -250,6 +250,7 @@ echo "== GET /player/bunker/summary =="
 request_with_player_cookie
 assert_status "200" "GET /player/bunker/summary"
 assert_body_contains '"statsAvailable":true' "GET /player/bunker/summary"
+assert_body_contains '"currentSeason"' "GET /player/bunker/summary"
 assert_body_contains "season_player_artifact_connected" "GET /player/bunker/summary"
 assert_body_contains '"seasonPlayer"' "GET /player/bunker/summary"
 assert_body_contains '"competitiveProfile"' "GET /player/bunker/summary"
