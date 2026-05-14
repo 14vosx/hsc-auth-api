@@ -52,7 +52,68 @@ function buildCompetitiveProfileNotes({ competitiveProfileResult }) {
   return [];
 }
 
-function buildFallbackData({ player, note, competitiveProfileResult }) {
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toPublicDate(value) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return value ?? null;
+}
+
+function buildActiveSeasonCurrentSeason(activeSeason) {
+  if (!activeSeason) {
+    return null;
+  }
+
+  return {
+    slug: activeSeason.slug,
+    name: activeSeason.name,
+    status: activeSeason.status,
+    scope: {
+      startAt: toPublicDate(activeSeason.start_at),
+      endAt: toPublicDate(activeSeason.end_at),
+    },
+  };
+}
+
+function buildCurrentSeason({ artifactSeason, activeSeason }) {
+  if (isPlainObject(artifactSeason)) {
+    return {
+      ...artifactSeason,
+      ...(activeSeason?.name ? { name: activeSeason.name } : {}),
+      ...(activeSeason?.status ? { status: activeSeason.status } : {}),
+    };
+  }
+
+  if (artifactSeason != null) {
+    return artifactSeason;
+  }
+
+  return buildActiveSeasonCurrentSeason(activeSeason);
+}
+
+async function getActiveSeasonDefensively(seasonsRepo) {
+  if (typeof seasonsRepo?.getActiveSeason !== "function") {
+    return null;
+  }
+
+  try {
+    return await seasonsRepo.getActiveSeason();
+  } catch {
+    return null;
+  }
+}
+
+function buildFallbackData({
+  player,
+  note,
+  competitiveProfileResult,
+  activeSeason,
+}) {
   const competitiveProfile = competitiveProfileResult.ok
     ? competitiveProfileResult.profile
     : null;
@@ -64,7 +125,10 @@ function buildFallbackData({ player, note, competitiveProfileResult }) {
       seasonFirst: true,
       statsAvailable: false,
     },
-    currentSeason: null,
+    currentSeason: buildCurrentSeason({
+      artifactSeason: null,
+      activeSeason,
+    }),
     lifetime: null,
     competitiveProfile,
     notes: [
@@ -75,7 +139,12 @@ function buildFallbackData({ player, note, competitiveProfileResult }) {
   };
 }
 
-function buildReadyData({ player, artifact, competitiveProfileResult }) {
+function buildReadyData({
+  player,
+  artifact,
+  competitiveProfileResult,
+  activeSeason,
+}) {
   const seasonPlayer = sanitizeArtifact(artifact);
   const competitiveProfile = competitiveProfileResult.ok
     ? competitiveProfileResult.profile
@@ -88,7 +157,10 @@ function buildReadyData({ player, artifact, competitiveProfileResult }) {
       seasonFirst: true,
       statsAvailable: true,
     },
-    currentSeason: seasonPlayer?.season ?? null,
+    currentSeason: buildCurrentSeason({
+      artifactSeason: seasonPlayer?.season,
+      activeSeason,
+    }),
     lifetime: null,
     seasonPlayer,
     competitiveProfile,
@@ -100,7 +172,10 @@ function buildReadyData({ player, artifact, competitiveProfileResult }) {
   };
 }
 
-export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
+export function registerPlayerBunkerSummaryRoute(
+  app,
+  { requirePlayer, seasonsRepo = null },
+) {
   app.get("/player/bunker/summary", async (req, res) => {
     const authenticated = await requirePlayer(req, res);
 
@@ -110,6 +185,7 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
 
     const player = req.player ?? {};
     let data;
+    const activeSeason = await getActiveSeasonDefensively(seasonsRepo);
     const competitiveProfileResult = await readCompetitiveProfile({
       baseUrl: PLAYER_BUNKER_STATIC_API_BASE_URL,
       timeoutMs: PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
@@ -128,18 +204,21 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
           player,
           artifact: result.artifact,
           competitiveProfileResult,
+          activeSeason,
         });
       } else if (result.reason === "not_configured" || result.reason === "not_found") {
         data = buildFallbackData({
           player,
           note: result.reason,
           competitiveProfileResult,
+          activeSeason,
         });
       } else {
         data = buildFallbackData({
           player,
           note: "season_player_artifact_unavailable",
           competitiveProfileResult,
+          activeSeason,
         });
       }
     } catch {
@@ -147,6 +226,7 @@ export function registerPlayerBunkerSummaryRoute(app, { requirePlayer }) {
         player,
         note: "season_player_artifact_unavailable",
         competitiveProfileResult,
+        activeSeason,
       });
     }
 
