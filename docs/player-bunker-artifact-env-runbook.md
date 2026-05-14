@@ -18,12 +18,28 @@ A leitura do artifact depende destas envs na Auth API:
 ```text
 PLAYER_BUNKER_ARTIFACT_ROOT
 PLAYER_BUNKER_ACTIVE_SEASON_SLUG
+PLAYER_BUNKER_STATIC_API_BASE_URL
+PLAYER_BUNKER_STATIC_API_TIMEOUT_MS
 ```
 
 `PLAYER_BUNKER_ARTIFACT_ROOT` aponta para o diretório raiz controlado onde o ETL
 publica os artifacts para leitura local pela Auth API.
 
 `PLAYER_BUNKER_ACTIVE_SEASON_SLUG` seleciona a season ativa dentro desse root.
+
+`PLAYER_BUNKER_STATIC_API_BASE_URL` é opcional e aponta para a Static API v2
+quando a Auth API deve enriquecer `/player/bunker/summary` com
+`data.competitiveProfile`. O source esperado é o JSON público:
+
+```text
+<PLAYER_BUNKER_STATIC_API_BASE_URL>/player/<steamid64>.json
+```
+
+`PLAYER_BUNKER_STATIC_API_TIMEOUT_MS` controla o timeout curto dessa leitura
+opcional. Se a Static API v2 não estiver configurada, retornar 404, falhar,
+expirar ou enviar JSON inválido, a Auth API mantém HTTP 200 e continua
+retornando `seasonPlayer` ou o fallback atual. Nenhum cookie, secret ou token é
+necessário para esse enriquecimento, e essa configuração não implica deploy.
 
 Root recomendado para staging/local nesta etapa:
 
@@ -51,8 +67,10 @@ comandos compartilhados ou logs.
 
 ## Responsabilidades
 
-A Auth API não escreve artifact, não calcula stats e não chama HTTP para buscar
-artifact.
+A Auth API não escreve artifact e não calcula stats. A leitura de
+`competitiveProfile` é apenas um enriquecimento opcional por HTTP contra a
+Static API v2; o artifact Season-scoped continua vindo do filesystem local
+read-only.
 
 O fluxo esperado é:
 
@@ -91,6 +109,23 @@ Quando o artifact é válido:
 ```text
 data.bunker.statsAvailable = true
 data.seasonPlayer = <artifact sanitizado>
+```
+
+Quando a Static API v2 retorna um profile válido para o SteamID autenticado:
+
+```text
+data.competitiveProfile = <profile sanitizado>
+data.player.avatarMedium = <avatar da Static API v2, se existir>
+data.player.steamProfileUrl = <profile URL da Static API v2, se existir>
+competitive_profile_connected
+```
+
+Quando a Static API v2 está configurada, mas o profile opcional não pode ser
+lido:
+
+```text
+data.competitiveProfile = null
+competitive_profile_unavailable
 ```
 
 O payload exposto em `data.seasonPlayer` deve ser sanitizado antes de sair da
@@ -141,6 +176,8 @@ Exemplo seguro de envs para a Auth API:
 ```bash
 PLAYER_BUNKER_ARTIFACT_ROOT="/var/tmp/hsc-cs2-etl-build/season-player"
 PLAYER_BUNKER_ACTIVE_SEASON_SLUG="cs2-YYYY-season-name"
+PLAYER_BUNKER_STATIC_API_BASE_URL="http://127.0.0.1:8080/api/cs2/v2"
+PLAYER_BUNKER_STATIC_API_TIMEOUT_MS="1500"
 ```
 
 Exemplo seguro de validação local da API:
@@ -170,7 +207,7 @@ placeholders seguros.
 - Artifact prod ainda não está publicado.
 - Cron/timer ETL ainda não integrado neste runbook.
 - Portal staging/deploy é outro runbook.
-- Timeline/lifetime ainda fora do escopo.
+- `competitiveProfile` é opcional e não substitui `seasonPlayer`.
 
 ## Próximas Frentes
 
