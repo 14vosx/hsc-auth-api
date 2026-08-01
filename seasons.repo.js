@@ -6,6 +6,7 @@ import {
   assertSeasonCanClose,
   SeasonLifecycleError,
 } from "./src/services/seasons/lifecycle.js";
+import { validateSeasonDateRange } from "./src/services/seasons/validators.js";
 
 const SEASONS_LIFECYCLE_LOCK_NAME = "hsc:seasons:lifecycle:v1";
 const SEASONS_HTTP_LOCK_TIMEOUT_SECONDS = 5;
@@ -18,6 +19,13 @@ const STABLE_CLOSE_ERRORS = new Set([
   "season_not_found",
   "season_close_failed",
 ]);
+const STABLE_UPDATE_ERRORS = new Set([
+  "season_not_found",
+  "season_closed",
+  "start_must_be_before_end",
+  "season_date_overlap",
+  "season_update_failed",
+]);
 
 function createActivationError(code) {
   const error = new Error("Season activation failed.");
@@ -27,6 +35,12 @@ function createActivationError(code) {
 
 function createCloseError(code) {
   const error = new Error("Season close failed.");
+  error.code = code;
+  return error;
+}
+
+function createUpdateError(code) {
+  const error = new Error("Season update failed.");
   error.code = code;
   return error;
 }
@@ -157,54 +171,151 @@ export function createSeasonsRepo(dbConfig, {
   }
 
   async function patchSeasonBySlug(slug, patch, audit = null) {
-    const sets = [];
-    const vals = [];
+    try {
+      const lockedResult = await runWithAdvisoryLockTx({
+        dbConfig,
+        lockName: SEASONS_LIFECYCLE_LOCK_NAME,
+        timeoutSeconds: SEASONS_HTTP_LOCK_TIMEOUT_SECONDS,
+        work: async (conn) => {
+          const [targetRows] = await conn.execute(
+            `
+            SELECT slug, status, start_at, end_at
+            FROM seasons
+            WHERE slug = ?
+            FOR UPDATE
+            `,
+            [slug],
+          );
 
-    if (patch.name != null) {
-      sets.push("name = ?");
-      vals.push(patch.name);
-    }
-    if (patch.description !== undefined) {
-      sets.push("description = ?");
-      vals.push(patch.description);
-    }
-    if (Object.hasOwn(patch, "coverImageUrl")) {
-      sets.push("cover_image_url = ?");
-      vals.push(normalizeCoverImageUrl(patch.coverImageUrl));
-    }
-    if (patch.startAt != null) {
-      sets.push("start_at = ?");
-      vals.push(patch.startAt);
-    }
-    if (patch.endAt != null) {
-      sets.push("end_at = ?");
-      vals.push(patch.endAt);
-    }
+          const target = targetRows[0] ?? null;
+          if (!target) {
+            throw createUpdateError("season_not_found");
+          }
+          if (target.status === "closed") {
+            throw createUpdateError("season_closed");
+          }
 
-    if (sets.length === 0) return 0;
+          if (Object.keys(patch).length === 0) {
+            return { ok: true, updated: false };
+          }
 
-    vals.push(slug);
+          const hasStartAt = Object.hasOwn(patch, "startAt");
+          const hasEndAt = Object.hasOwn(patch, "endAt");
 
-    return runInTx(dbConfig, async (conn) => {
-      const [result] = await conn.execute(
-        `
-        UPDATE seasons
-        SET ${sets.join(", ")}
-        WHERE slug = ?
-        `,
-        vals,
-      );
+          if (hasStartAt || hasEndAt) {
+            const finalStartAt = hasStartAt ? patch.startAt : target.start_at;
+            const finalEndAt = hasEndAt ? patch.endAt : target.end_at;
+            const range = validateSeasonDateRange({
+              startAt: finalStartAt,
+              endAt: finalEndAt,
+            });
 
-      if ((result.affectedRows || 0) === 0) {
-        return 0;
+            if (!range.ok) {
+              if (range.error === "start_must_be_before_end") {
+                throw createUpdateError(range.error);
+              }
+              throw createUpdateError("season_update_invalid_datetime");
+            }
+
+            const [overlapRows] = await conn.execute(
+              `
+              SELECT id, slug, name, status, start_at, end_at
+              FROM seasons
+              WHERE start_at <= ?
+                AND end_at >= ?
+                AND slug <> ?
+              ORDER BY start_at ASC, id ASC
+              LIMIT 1
+              FOR UPDATE
+              `,
+              [finalEndAt, finalStartAt, slug],
+            );
+
+            if (overlapRows.length > 0) {
+              throw createUpdateError("season_date_overlap");
+            }
+          }
+
+          const sets = [];
+          const vals = [];
+
+          if (Object.hasOwn(patch, "name")) {
+            sets.push("name = ?");
+            vals.push(patch.name);
+          }
+          if (Object.hasOwn(patch, "description")) {
+            sets.push("description = ?");
+            vals.push(patch.description);
+          }
+          if (Object.hasOwn(patch, "coverImageUrl")) {
+            sets.push("cover_image_url = ?");
+            vals.push(normalizeCoverImageUrl(patch.coverImageUrl));
+          }
+          if (hasStartAt) {
+            sets.push("start_at = ?");
+            vals.push(patch.startAt);
+          }
+          if (hasEndAt) {
+            sets.push("end_at = ?");
+            vals.push(patch.endAt);
+          }
+
+          vals.push(slug, target.status);
+
+          const [updateResult] = await conn.execute(
+            `
+            UPDATE seasons
+            SET ${sets.join(", ")}
+            WHERE slug = ?
+              AND status = ?
+            `,
+            vals,
+          );
+
+          if (updateResult.affectedRows !== 1) {
+            throw createUpdateError("season_update_failed");
+          }
+
+          if (audit) {
+            await insertAdminAudit(conn, {
+              ...audit,
+              action: "season.update",
+              entityType: "season",
+              entityKey: slug,
+            });
+          }
+
+          return { ok: true, updated: true };
+        },
+      });
+
+      if (!lockedResult.acquired) {
+        return {
+          ok: false,
+          error: "season_lifecycle_busy",
+          cleanupWarnings: lockedResult.cleanupWarnings,
+        };
       }
 
-      if (audit) {
-        await insertAdminAudit(conn, audit);
+      return {
+        ...lockedResult.value,
+        cleanupWarnings: lockedResult.cleanupWarnings,
+      };
+    } catch (err) {
+      const cleanupWarnings = Array.isArray(err?.cleanupWarnings)
+        ? err.cleanupWarnings
+        : [];
+
+      if (STABLE_UPDATE_ERRORS.has(err?.code)) {
+        return { ok: false, error: err.code, cleanupWarnings };
       }
 
-      return result.affectedRows || 0;
-    });
+      return {
+        ok: false,
+        error: "tx_failed",
+        cleanupWarnings,
+      };
+    }
   }
 
   async function setSeasonClosed(slug, audit = null) {

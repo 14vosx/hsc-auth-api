@@ -1,4 +1,5 @@
 // src/routes/admin/seasons.write.js
+import { normalizeSeasonPatch } from "../../services/seasons/validators.js";
 
 export function registerAdminSeasonsWriteRoutes(app, {
   requireAdmin,
@@ -75,39 +76,44 @@ export function registerAdminSeasonsWriteRoutes(app, {
     const slug = normalizeSlug(req.params.slug);
     if (!slug) return sendBadRequest(res, "invalid_slug");
 
+    const validation = normalizeSeasonPatch(req.body || {});
+    if (!validation.ok)
+      return sendBadRequest(
+        res,
+        validation.error,
+        validation.field ? { field: validation.field } : undefined,
+      );
+
     try {
-      const current = await seasonsRepo.getSeasonBySlug(slug);
-      if (!current) return sendNotFound(res, "season_not_found");
-      if (current.status === "closed") return sendConflict(res, "season_closed");
-
-      const v = validateSeasonPatch(current, req.body || {});
-      if (!v.ok)
-        return sendBadRequest(
-          res,
-          v.error,
-          v.field ? { field: v.field } : undefined,
-        );
-
-      const startAt = v.patch.startAt ?? current.start_at;
-      const endAt = v.patch.endAt ?? current.end_at;
-      const overlap = await seasonsRepo.findSeasonDateOverlap({
-        startAt,
-        endAt,
-        excludeSlug: slug,
-      });
-      if (overlap) return sendConflict(res, "season_date_overlap");
-
-      const affected = await seasonsRepo.patchSeasonBySlug(slug, v.patch, {
+      const result = await seasonsRepo.patchSeasonBySlug(slug, validation.patch, {
         userId: Number.isInteger(req.admin?.userId) ? req.admin.userId : null,
         route: req.route?.path || req.originalUrl || "/admin/seasons/:slug",
         method: req.method,
         action: "season.update",
         via: req.admin?.via === "session" ? "session" : "admin-key",
+        entityType: "season",
+        entityKey: slug,
       });
 
-      return res.status(200).json({ ok: true, slug, updated: affected > 0 });
-    } catch (err) {
-      return res.status(500).json({ ok: false, error: err.message });
+      if (!result.ok) {
+        if (result.error === "season_not_found")
+          return sendNotFound(res, result.error);
+        if (
+          result.error === "season_closed" ||
+          result.error === "season_date_overlap"
+        )
+          return sendConflict(res, result.error);
+        if (result.error === "start_must_be_before_end")
+          return sendBadRequest(res, result.error);
+        if (result.error === "season_lifecycle_busy")
+          return res.status(503).json({ ok: false, error: result.error });
+
+        return res.status(500).json({ ok: false, error: "internal_error" });
+      }
+
+      return res.status(200).json({ ok: true, slug, updated: result.updated });
+    } catch {
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
   });
 }
