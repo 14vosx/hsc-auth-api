@@ -3,6 +3,7 @@ import { runInTx, insertAdminAudit } from "./src/db/adminTx.js";
 import { runWithAdvisoryLockTx as defaultRunWithAdvisoryLockTx } from "./src/db/advisoryTx.js";
 import {
   assertSeasonCanActivate,
+  assertSeasonCanClose,
   SeasonLifecycleError,
 } from "./src/services/seasons/lifecycle.js";
 
@@ -13,9 +14,19 @@ const STABLE_ACTIVATION_ERRORS = new Set([
   "season_active_conflict",
   "season_activation_failed",
 ]);
+const STABLE_CLOSE_ERRORS = new Set([
+  "season_not_found",
+  "season_close_failed",
+]);
 
 function createActivationError(code) {
   const error = new Error("Season activation failed.");
+  error.code = code;
+  return error;
+}
+
+function createCloseError(code) {
+  const error = new Error("Season close failed.");
   error.code = code;
   return error;
 }
@@ -197,26 +208,82 @@ export function createSeasonsRepo(dbConfig, {
   }
 
   async function setSeasonClosed(slug, audit = null) {
-    return runInTx(dbConfig, async (conn) => {
-      const [result] = await conn.execute(
-        `
-        UPDATE seasons
-        SET status = 'closed'
-        WHERE slug = ?
-        `,
-        [slug],
-      );
+    try {
+      const lockedResult = await runWithAdvisoryLockTx({
+        dbConfig,
+        lockName: SEASONS_LIFECYCLE_LOCK_NAME,
+        timeoutSeconds: SEASONS_HTTP_LOCK_TIMEOUT_SECONDS,
+        work: async (conn) => {
+          const [targetRows] = await conn.execute(
+            `
+            SELECT slug, status
+            FROM seasons
+            WHERE slug = ?
+            FOR UPDATE
+            `,
+            [slug],
+          );
 
-      if ((result.affectedRows || 0) === 0) {
-        return 0;
+          const target = targetRows[0] ?? null;
+          if (!target) {
+            throw createCloseError("season_not_found");
+          }
+
+          assertSeasonCanClose({ status: target.status });
+
+          const [updateResult] = await conn.execute(
+            `
+            UPDATE seasons
+            SET status = 'closed'
+            WHERE slug = ? AND status = 'active'
+            `,
+            [slug],
+          );
+
+          if (updateResult.affectedRows !== 1) {
+            throw createCloseError("season_close_failed");
+          }
+
+          if (audit) {
+            await insertAdminAudit(conn, {
+              ...audit,
+              action: "season.close",
+              entityType: "season",
+              entityKey: slug,
+            });
+          }
+
+          return { ok: true };
+        },
+      });
+
+      if (!lockedResult.acquired) {
+        return {
+          ok: false,
+          error: "season_lifecycle_busy",
+          cleanupWarnings: lockedResult.cleanupWarnings,
+        };
       }
 
-      if (audit) {
-        await insertAdminAudit(conn, audit);
+      return {
+        ...lockedResult.value,
+        cleanupWarnings: lockedResult.cleanupWarnings,
+      };
+    } catch (err) {
+      const cleanupWarnings = Array.isArray(err?.cleanupWarnings)
+        ? err.cleanupWarnings
+        : [];
+
+      if (err instanceof SeasonLifecycleError || STABLE_CLOSE_ERRORS.has(err?.code)) {
+        return { ok: false, error: err.code, cleanupWarnings };
       }
 
-      return result.affectedRows || 0;
-    });
+      return {
+        ok: false,
+        error: "tx_failed",
+        cleanupWarnings,
+      };
+    }
   }
 
   async function activateSeasonTx(slug, audit = null) {
