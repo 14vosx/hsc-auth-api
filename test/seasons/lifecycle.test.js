@@ -172,10 +172,10 @@ test('closing rejects a draft Season', () => {
   );
 });
 
-test('closing rejects a closed Season', () => {
+test('closing rejects an already closed Season', () => {
   assertLifecycleCode(
     () => assertSeasonCanClose({ status: SEASON_STATUSES.CLOSED }),
-    SEASON_LIFECYCLE_ERROR_CODES.CLOSED,
+    SEASON_LIFECYCLE_ERROR_CODES.ALREADY_CLOSED,
   );
 });
 

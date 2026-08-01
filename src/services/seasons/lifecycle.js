@@ -11,6 +11,7 @@ export const SEASON_LIFECYCLE_ERROR_CODES = Object.freeze({
   EXPIRED: 'season_expired',
   NOT_ACTIVE: 'season_not_active',
   CLOSED: 'season_closed',
+  ALREADY_CLOSED: 'season_already_closed',
 });
 
 const ERROR_MESSAGES = Object.freeze({
@@ -84,7 +85,9 @@ export function assertSeasonCanClose({ status }) {
   }
 
   if (status === SEASON_STATUSES.CLOSED) {
-    throw new SeasonLifecycleError(SEASON_LIFECYCLE_ERROR_CODES.CLOSED);
+    throw new SeasonLifecycleError(
+      SEASON_LIFECYCLE_ERROR_CODES.ALREADY_CLOSED,
+    );
   }
 
   if (status === SEASON_STATUSES.DRAFT) {
