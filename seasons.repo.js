@@ -4,12 +4,14 @@ import { runWithAdvisoryLockTx as defaultRunWithAdvisoryLockTx } from "./src/db/
 import {
   assertSeasonCanActivate,
   assertSeasonCanClose,
+  shouldAutoCloseSeason,
   SeasonLifecycleError,
 } from "./src/services/seasons/lifecycle.js";
 import { validateSeasonDateRange } from "./src/services/seasons/validators.js";
 
 const SEASONS_LIFECYCLE_LOCK_NAME = "hsc:seasons:lifecycle:v1";
 const SEASONS_HTTP_LOCK_TIMEOUT_SECONDS = 5;
+const SEASONS_RECONCILE_LOCK_TIMEOUT_SECONDS = 0;
 const STABLE_ACTIVATION_ERRORS = new Set([
   "season_not_found",
   "season_active_conflict",
@@ -31,6 +33,16 @@ const STABLE_CREATE_ERRORS = new Set([
   "slug_already_exists",
   "season_create_failed",
 ]);
+const STABLE_RECONCILE_ERRORS = new Set([
+  "season_active_invariant_violation",
+  "season_auto_close_failed",
+]);
+
+function createReconcileError(code) {
+  const error = new Error("Season reconciliation failed.");
+  error.code = code;
+  return error;
+}
 
 function createCreateError(code) {
   const error = new Error("Season creation failed.");
@@ -492,6 +504,122 @@ export function createSeasonsRepo(dbConfig, {
     }
   }
 
+  async function reconcileExpiredActiveSeason() {
+    try {
+      const lockedResult = await runWithAdvisoryLockTx({
+        dbConfig,
+        lockName: SEASONS_LIFECYCLE_LOCK_NAME,
+        timeoutSeconds: SEASONS_RECONCILE_LOCK_TIMEOUT_SECONDS,
+        work: async (conn) => {
+          const [activeRows] = await conn.execute(
+            `
+            SELECT
+              id,
+              slug,
+              status,
+              end_at,
+              UTC_TIMESTAMP() AS now_utc
+            FROM seasons
+            WHERE status = 'active'
+            ORDER BY id ASC
+            LIMIT 2
+            FOR UPDATE
+            `,
+          );
+
+          if (activeRows.length > 1) {
+            throw createReconcileError("season_active_invariant_violation");
+          }
+
+          const activeSeason = activeRows[0] ?? null;
+          if (!activeSeason) {
+            return { ok: true, outcome: "no_active" };
+          }
+
+          if (
+            activeSeason.status !== "active" ||
+            typeof activeSeason.slug !== "string" ||
+            !activeSeason.slug
+          ) {
+            throw createReconcileError("season_reconcile_invalid_state");
+          }
+
+          const shouldClose = shouldAutoCloseSeason({
+            status: activeSeason.status,
+            endAt: activeSeason.end_at,
+            now: activeSeason.now_utc,
+          });
+
+          if (!shouldClose) {
+            return {
+              ok: true,
+              outcome: "not_expired",
+              slug: activeSeason.slug,
+            };
+          }
+
+          const [updateResult] = await conn.execute(
+            `
+            UPDATE seasons
+            SET status = 'closed'
+            WHERE slug = ?
+              AND status = 'active'
+              AND end_at <= UTC_TIMESTAMP()
+            `,
+            [activeSeason.slug],
+          );
+
+          if (updateResult.affectedRows !== 1) {
+            throw createReconcileError("season_auto_close_failed");
+          }
+
+          await insertAdminAudit(conn, {
+            userId: null,
+            route: "scripts/reconcile-seasons",
+            method: "SYSTEM",
+            action: "season.auto_close",
+            via: "system",
+            entityType: "season",
+            entityKey: activeSeason.slug,
+          });
+
+          return {
+            ok: true,
+            outcome: "closed",
+            slug: activeSeason.slug,
+          };
+        },
+      });
+
+      if (!lockedResult.acquired) {
+        return {
+          ok: true,
+          outcome: "skipped_busy",
+          cleanupWarnings: lockedResult.cleanupWarnings,
+        };
+      }
+
+      return {
+        ...lockedResult.value,
+        cleanupWarnings: lockedResult.cleanupWarnings,
+      };
+    } catch (err) {
+      const cleanupWarnings = Array.isArray(err?.cleanupWarnings)
+        ? err.cleanupWarnings
+        : [];
+
+      if (STABLE_RECONCILE_ERRORS.has(err?.code)) {
+        return { ok: false, error: err.code, cleanupWarnings };
+      }
+
+      return {
+        ok: false,
+        error: "tx_failed",
+        cleanupWarnings,
+      };
+    }
+  }
+
   async function activateSeasonTx(slug, audit = null) {
     try {
       const lockedResult = await runWithAdvisoryLockTx({
@@ -605,6 +733,7 @@ export function createSeasonsRepo(dbConfig, {
     insertSeason,
     patchSeasonBySlug,
     setSeasonClosed,
+    reconcileExpiredActiveSeason,
     activateSeasonTx,
   };
 }
