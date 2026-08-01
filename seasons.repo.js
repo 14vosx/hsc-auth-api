@@ -1,5 +1,5 @@
 import mysql from "mysql2/promise";
-import { runInTx, insertAdminAudit } from "./src/db/adminTx.js";
+import { insertAdminAudit } from "./src/db/adminTx.js";
 import { runWithAdvisoryLockTx as defaultRunWithAdvisoryLockTx } from "./src/db/advisoryTx.js";
 import {
   assertSeasonCanActivate,
@@ -26,6 +26,17 @@ const STABLE_UPDATE_ERRORS = new Set([
   "season_date_overlap",
   "season_update_failed",
 ]);
+const STABLE_CREATE_ERRORS = new Set([
+  "season_date_overlap",
+  "slug_already_exists",
+  "season_create_failed",
+]);
+
+function createCreateError(code) {
+  const error = new Error("Season creation failed.");
+  error.code = code;
+  return error;
+}
 
 function createActivationError(code) {
   const error = new Error("Season activation failed.");
@@ -146,28 +157,112 @@ export function createSeasonsRepo(dbConfig, {
     endAt,
     audit = null,
   }) {
-    return runInTx(dbConfig, async (conn) => {
-      const [result] = await conn.execute(
-        `
-        INSERT INTO seasons (slug, name, description, cover_image_url, start_at, end_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'draft')
-        `,
-        [
-          slug,
-          name,
-          description ?? null,
-          normalizeCoverImageUrl(coverImageUrl),
-          startAt,
-          endAt,
-        ],
-      );
+    try {
+      const lockedResult = await runWithAdvisoryLockTx({
+        dbConfig,
+        lockName: SEASONS_LIFECYCLE_LOCK_NAME,
+        timeoutSeconds: SEASONS_HTTP_LOCK_TIMEOUT_SECONDS,
+        work: async (conn) => {
+          const [overlapRows] = await conn.execute(
+            `
+            SELECT
+              id,
+              slug,
+              name,
+              status,
+              start_at,
+              end_at
+            FROM seasons
+            WHERE start_at <= ?
+              AND end_at >= ?
+            ORDER BY start_at ASC, id ASC
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [endAt, startAt],
+          );
 
-      if (audit) {
-        await insertAdminAudit(conn, audit);
+          if (overlapRows.length > 0) {
+            throw createCreateError("season_date_overlap");
+          }
+
+          let result;
+          try {
+            [result] = await conn.execute(
+              `
+              INSERT INTO seasons
+                (
+                  slug,
+                  name,
+                  description,
+                  cover_image_url,
+                  start_at,
+                  end_at,
+                  status
+                )
+              VALUES
+                (?, ?, ?, ?, ?, ?, 'draft')
+              `,
+              [
+                slug,
+                name,
+                description ?? null,
+                normalizeCoverImageUrl(coverImageUrl),
+                startAt,
+                endAt,
+              ],
+            );
+          } catch (error) {
+            if (error?.code === "ER_DUP_ENTRY") {
+              throw createCreateError("slug_already_exists");
+            }
+            throw error;
+          }
+
+          if (result.affectedRows !== 1) {
+            throw createCreateError("season_create_failed");
+          }
+
+          if (audit) {
+            await insertAdminAudit(conn, {
+              ...audit,
+              action: "season.create",
+              entityType: "season",
+              entityKey: slug,
+            });
+          }
+
+          return { ok: true, id: result.insertId };
+        },
+      });
+
+      if (!lockedResult.acquired) {
+        return {
+          ok: false,
+          error: "season_lifecycle_busy",
+          cleanupWarnings: lockedResult.cleanupWarnings,
+        };
       }
 
-      return result.insertId;
-    });
+      return {
+        ...lockedResult.value,
+        cleanupWarnings: lockedResult.cleanupWarnings,
+      };
+    } catch (err) {
+      const cleanupWarnings = Array.isArray(err?.cleanupWarnings)
+        ? err.cleanupWarnings
+        : [];
+
+      if (STABLE_CREATE_ERRORS.has(err?.code)) {
+        return { ok: false, error: err.code, cleanupWarnings };
+      }
+
+      return {
+        ok: false,
+        error: "tx_failed",
+        cleanupWarnings,
+      };
+    }
   }
 
   async function patchSeasonBySlug(slug, patch, audit = null) {

@@ -30,13 +30,7 @@ export function registerAdminSeasonsWriteRoutes(app, {
     }
 
     try {
-      const overlap = await seasonsRepo.findSeasonDateOverlap({
-        startAt: v.startAt,
-        endAt: v.endAt,
-      });
-      if (overlap) return sendConflict(res, "season_date_overlap");
-
-      const id = await seasonsRepo.insertSeason({
+      const result = await seasonsRepo.insertSeason({
         slug: v.slug,
         name: v.name,
         description: description != null ? String(description).trim() : null,
@@ -49,21 +43,31 @@ export function registerAdminSeasonsWriteRoutes(app, {
           method: req.method,
           action: "season.create",
           via: req.admin?.via === "session" ? "session" : "admin-key",
+          entityType: "season",
+          entityKey: v.slug,
         },
       });
 
+      if (!result.ok) {
+        if (
+          result.error === "season_date_overlap" ||
+          result.error === "slug_already_exists"
+        )
+          return sendConflict(res, result.error);
+        if (result.error === "season_lifecycle_busy")
+          return res.status(503).json({ ok: false, error: result.error });
+
+        return res.status(500).json({ ok: false, error: "internal_error" });
+      }
+
       return res.status(201).json({
         ok: true,
-        id,
+        id: result.id,
         slug: v.slug,
         status: "draft",
       });
-    } catch (err) {
-      const msg = err?.message || String(err);
-      if (msg.toLowerCase().includes("duplicate")) {
-        return sendConflict(res, "slug_already_exists");
-      }
-      return res.status(500).json({ ok: false, error: msg });
+    } catch {
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
   });
 
