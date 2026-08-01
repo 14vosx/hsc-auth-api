@@ -24,13 +24,15 @@ export async function insertAdminAudit(conn, {
   method,
   action,
   via,
+  entityType = null,
+  entityKey = null,
 }) {
   await conn.execute(
     `
     INSERT INTO admin_audit_log
-    (user_id, route, method, action, via)
-    VALUES (?, ?, ?, ?, ?)
+    (user_id, route, method, action, via, entity_type, entity_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [userId, route, method, action, via],
+    [userId, route, method, action, via, entityType, entityKey],
   );
 }
