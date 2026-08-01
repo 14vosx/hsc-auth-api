@@ -23,10 +23,11 @@ export function validateSeasonInput({ slug, name, start_at, end_at, cover_image_
   const end = parseUtcIsoToDatetime(end_at);
   if (!end.ok) return { ok: false, error: end.error, field: "end_at" };
 
-  // Compare using Date objects to avoid string compare edge cases
-  const startMs = new Date(String(start_at).trim()).getTime();
-  const endMs = new Date(String(end_at).trim()).getTime();
-  if (!(startMs < endMs))
+  const range = validateSeasonDateRange({
+    startAt: start.datetime,
+    endAt: end.datetime,
+  });
+  if (!range.ok)
     return { ok: false, error: "start_must_be_before_end" };
 
   return {
