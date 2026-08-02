@@ -1,0 +1,15 @@
+[Unit]
+Description=HSC Auth API Season lifecycle reconciliation
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=hscadmin
+Group=hscadmin
+WorkingDirectory=/opt/hsc/hsc-auth-api
+ExecStart=/usr/bin/node /opt/hsc/hsc-auth-api/scripts/reconcile-seasons.js
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hsc-auth-api-reconcile-seasons
+TimeoutStartSec=60

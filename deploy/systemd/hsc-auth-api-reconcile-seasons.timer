@@ -1,0 +1,11 @@
+[Unit]
+Description=Run HSC Season lifecycle reconciliation every five minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/5:00
+Persistent=true
+AccuracySec=30s
+Unit=hsc-auth-api-reconcile-seasons.service
+
+[Install]
+WantedBy=timers.target
