@@ -2,16 +2,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import mysql from "mysql2/promise";
 import { fileURLToPath } from "node:url";
-import dotenv from "dotenv";
 
 import { buildDbConfig } from "../src/config/db.js";
+import {
+  loadMigrationEnv,
+  MIGRATION_ENV_LOAD_ERROR,
+} from "./migrate-env.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
 const migrationsDir = path.resolve(__dirname, "../db/migrations");
-
-const envFile = process.env.ENV_FILE || ".env";
-dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
 function isSqlFile(fileName) {
   return fileName.endsWith(".sql");
@@ -73,6 +74,18 @@ async function applyMigration(connection, fileName) {
 }
 
 async function main() {
+  try {
+    loadMigrationEnv({ projectRoot });
+  } catch (error) {
+    if (error?.code === MIGRATION_ENV_LOAD_ERROR) {
+      process.stderr.write("Migration environment could not be loaded.\n");
+      process.exitCode = 1;
+      return;
+    }
+
+    throw error;
+  }
+
   const dbConfig = buildDbConfig();
   const connection = await mysql.createConnection(dbConfig);
 
