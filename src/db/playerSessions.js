@@ -22,12 +22,17 @@ export async function findActivePlayerSessionByToken(dbConfig, rawToken) {
           s.player_account_id,
           s.expires_at,
           a.display_name,
-          i.steamid64
+          i.steamid64,
+          sp.personaname,
+          sp.avatar_medium_url,
+          sp.profile_url
         FROM player_sessions s
         INNER JOIN player_accounts a
           ON a.id = s.player_account_id
         LEFT JOIN player_steam_identities i
           ON i.player_account_id = a.id
+        LEFT JOIN steam_profiles sp
+          ON sp.steamid64 = i.steamid64
         WHERE s.token_hash = ?
           AND s.revoked_at IS NULL
           AND s.expires_at > UTC_TIMESTAMP()
@@ -46,7 +51,9 @@ export async function findActivePlayerSessionByToken(dbConfig, rawToken) {
       sessionId: row.session_id,
       playerAccountId: row.player_account_id,
       steamid64: row.steamid64 ?? null,
-      displayName: row.display_name ?? null,
+      displayName: row.personaname ?? row.display_name ?? null,
+      avatarMedium: row.avatar_medium_url ?? null,
+      steamProfileUrl: row.profile_url ?? null,
       expiresAt: row.expires_at,
     };
   } finally {

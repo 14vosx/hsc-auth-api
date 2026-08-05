@@ -27,6 +27,8 @@ export function createPlayerAuth({ dbConfig }) {
       playerAccountId: session.playerAccountId ?? null,
       steamid64: session.steamid64 ?? null,
       displayName: session.displayName ?? null,
+      avatarMedium: session.avatarMedium ?? null,
+      steamProfileUrl: session.steamProfileUrl ?? null,
       expiresAt: session.expiresAt ?? null,
     };
 
