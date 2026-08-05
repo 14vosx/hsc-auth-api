@@ -65,6 +65,18 @@ test -f "$PLAYER_BUNKER_ARTIFACT_ROOT/season/$PLAYER_BUNKER_ACTIVE_SEASON_SLUG/p
 Não cole valores reais de `.env`, cookies, tokens ou callback Steam em docs,
 comandos compartilhados ou logs.
 
+### Invariante de Produção
+
+- `PLAYER_BUNKER_ACTIVE_SEASON_SLUG` é uma trava operacional (operational guard).
+- Seu valor deve corresponder exatamente ao slug da Season atualmente marcada como ativa no banco de dados da Auth API (`activeSeason.slug`).
+- Quando o slug configurado difere de `activeSeason.slug`, `GET /player/bunker/summary` retorna a nota:
+  `season_artifact_slug_mismatch`
+- Esse fallback ocorre antes mesmo da tentativa de leitura do artifact do player da Season.
+- A ausência do artifact do player para uma Season ativa com configuração alinhada retorna:
+  `not_found`
+- `not_found` é um estado esperado antes de o ETL materializar o primeiro artifact válido de player da Season.
+- `season_artifact_slug_mismatch` não é uma consequência esperada de uma Season não ter partidas válidas.
+
 ## Responsabilidades
 
 A Auth API não escreve artifact e não calcula stats. A leitura de
@@ -190,6 +202,20 @@ curl -i "http://127.0.0.1:3010/player/bunker/summary" \
 
 Não registrar o cookie real usado na validação.
 
+## Checklist de troca de Season em produção
+
+1. Confirmar o slug da Season ativa no banco de dados da Auth API (source of truth).
+2. Atualizar todas as fontes de configuração persistente utilizadas pelo serviço Auth API.
+3. Confirmar que o systemd e o ambiente da aplicação contêm o mesmo slug.
+4. Recarregar o systemd quando sua fonte de configuração for alterada.
+5. Reiniciar apenas o serviço `hsc-auth-api`.
+6. Confirmar serviço ativo (`active`) e a prontidão do banco de dados (database readiness).
+7. Executar um smoke somente de leitura em nível de código/fonte.
+8. Interpretar os resultados:
+   - `not_found`: configuração alinhada sem artifact de player materializado;
+   - `season_player_artifact_connected`: configuração alinhada com artifact de player materializado;
+   - `season_artifact_slug_mismatch`: defeito de configuração ou de contrato de artifact.
+
 ## Smoke Local
 
 Smoke local relacionado:
@@ -204,7 +230,7 @@ placeholders seguros.
 
 ## Limitações
 
-- Artifact prod ainda não está publicado.
+- A disponibilidade do artifact de player da Season depende da materialização do ETL e pode legitimamente estar ausente antes do processamento das primeiras partidas válidas da Season.
 - Cron/timer ETL ainda não integrado neste runbook.
 - Portal staging/deploy é outro runbook.
 - `competitiveProfile` é opcional e não substitui `seasonPlayer`.
