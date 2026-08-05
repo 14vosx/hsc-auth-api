@@ -27,16 +27,16 @@ function sanitizeArtifact(value) {
 }
 
 function buildPlayerData({ player, competitiveProfile }) {
+  const displayName = player.displayName ?? competitiveProfile?.name ?? null;
+  const avatarMedium = player.avatarMedium ?? competitiveProfile?.avatarMedium ?? null;
+  const steamProfileUrl = player.steamProfileUrl ?? competitiveProfile?.steamProfileUrl ?? null;
+
   return {
     playerAccountId: player.playerAccountId ?? null,
     steamid64: player.steamid64 ?? null,
-    displayName: player.displayName ?? null,
-    ...(competitiveProfile?.avatarMedium
-      ? { avatarMedium: competitiveProfile.avatarMedium }
-      : {}),
-    ...(competitiveProfile?.steamProfileUrl
-      ? { steamProfileUrl: competitiveProfile.steamProfileUrl }
-      : {}),
+    displayName,
+    ...(avatarMedium ? { avatarMedium } : {}),
+    ...(steamProfileUrl ? { steamProfileUrl } : {}),
   };
 }
 

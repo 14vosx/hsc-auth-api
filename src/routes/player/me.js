@@ -17,6 +17,8 @@ export function registerPlayerMeRoute(app, { requirePlayer }) {
         playerAccountId: player.playerAccountId ?? null,
         steamid64: player.steamid64 ?? null,
         displayName: player.displayName ?? null,
+        avatarMedium: player.avatarMedium ?? null,
+        steamProfileUrl: player.steamProfileUrl ?? null,
         sessionId: player.sessionId ?? null,
         expiresAt: player.expiresAt ?? null,
       },
