@@ -4,6 +4,8 @@ import { buildAuthConfig } from "./auth.js";
 import { buildPlayerAuthConfig } from "./playerAuth.js";
 import { buildPlayerSteamAuthConfig } from "./playerSteamAuth.js";
 import { buildPlayerBunkerConfig } from "./playerBunker.js";
+import { buildCorsConfig } from "./cors.js";
+import { buildDbRuntimeConfig } from "./db.js";
 
 export function buildRuntimeConfig(env = process.env) {
   const port = parsePort(env.PORT, 3000, "PORT");
@@ -25,6 +27,8 @@ export function buildAppConfig(env = process.env) {
   const playerAuth = buildPlayerAuthConfig(env);
   const playerSteamAuth = buildPlayerSteamAuthConfig(env, adminAuth);
   const playerBunker = buildPlayerBunkerConfig(env);
+  const cors = buildCorsConfig(env);
+  const db = buildDbRuntimeConfig(env);
 
   return Object.freeze({
     runtime,
@@ -32,5 +36,7 @@ export function buildAppConfig(env = process.env) {
     playerAuth,
     playerSteamAuth,
     playerBunker,
+    cors,
+    db,
   });
 }

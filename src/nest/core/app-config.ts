@@ -3,6 +3,24 @@ export interface AppConfig {
     readonly port: number;
     readonly publicUrl: string;
   };
+  readonly cors: {
+    readonly allowedOrigin: string;
+    readonly allowedOrigins: readonly string[];
+  };
+  readonly db: {
+    readonly configured: boolean;
+    readonly connection: {
+      readonly host: string;
+      readonly port: number;
+      readonly user?: string;
+      readonly password?: string;
+      readonly database?: string;
+      readonly timezone: string;
+      readonly ssl?: {
+        readonly rejectUnauthorized: boolean;
+      };
+    };
+  };
   readonly adminAuth?: unknown;
   readonly playerAuth?: unknown;
   readonly playerSteamAuth?: unknown;

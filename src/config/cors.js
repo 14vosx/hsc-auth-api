@@ -17,8 +17,16 @@ function computeAllowedOrigins(env = process.env) {
   return [single || "https://auth-api.haxixesmokeclub.com"];
 }
 
-export function buildCors(env = process.env) {
+export function buildCorsConfig(env = process.env) {
   const allowedOrigins = computeAllowedOrigins(env);
+  return {
+    allowedOrigin: allowedOrigins[0],
+    allowedOrigins,
+  };
+}
+
+export function buildCors(env = process.env) {
+  const { allowedOrigin, allowedOrigins } = buildCorsConfig(env);
   const allowedOriginsSet = new Set(allowedOrigins);
 
   const corsOptions = {
@@ -38,6 +46,6 @@ export function buildCors(env = process.env) {
     corsMiddleware: cors(corsOptions),
     preflightMiddleware: cors(corsOptions),
     preflightPattern: /.*/,
-    corsMeta: { allowedOrigin: allowedOrigins[0], allowedOrigins },
+    corsMeta: { allowedOrigin, allowedOrigins },
   };
 }
