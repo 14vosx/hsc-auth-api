@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { DatabaseService } from "../../database/database.service.js";
 
@@ -12,6 +12,12 @@ export interface UsableMagicLink {
   role: string | null;
 }
 
+export interface CreatedMagicLink {
+  magicLinkId: number;
+  rawToken: string;
+  expiresAt: string;
+}
+
 interface RawMagicLinkRow extends RowDataPacket {
   id: number;
   user_id: number;
@@ -21,9 +27,63 @@ interface RawMagicLinkRow extends RowDataPacket {
   role: string | null;
 }
 
+function formatUtcDatetime(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getUTCFullYear()}-` +
+    `${pad(date.getUTCMonth() + 1)}-` +
+    `${pad(date.getUTCDate())} ` +
+    `${pad(date.getUTCHours())}:` +
+    `${pad(date.getUTCMinutes())}:` +
+    `${pad(date.getUTCSeconds())}`
+  );
+}
+
 @Injectable()
 export class AdminMagicLinkRepository {
   constructor(private readonly databaseService: DatabaseService) {}
+
+  async createMagicLinkForUser(
+    userId: number,
+    ttlMinutes: number,
+  ): Promise<CreatedMagicLink> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new Error("invalid_user_id");
+    }
+
+    if (!Number.isInteger(ttlMinutes) || ttlMinutes <= 0) {
+      throw new Error("invalid_magic_link_ttl");
+    }
+
+    const rawToken = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256")
+      .update(rawToken, "utf8")
+      .digest("hex");
+
+    const expiresAtDate = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    const expiresAt = formatUtcDatetime(expiresAtDate);
+
+    const pool = this.databaseService.getPool();
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      `
+        INSERT INTO magic_links (
+          user_id,
+          token_hash,
+          expires_at,
+          used_at
+        )
+        VALUES (?, ?, ?, NULL)
+      `,
+      [userId, tokenHash, expiresAt],
+    );
+
+    return {
+      magicLinkId: result.insertId,
+      rawToken,
+      expiresAt,
+    };
+  }
 
   async findUsableMagicLinkByToken(
     rawToken: string,
