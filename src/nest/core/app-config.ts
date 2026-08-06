@@ -22,6 +22,7 @@ export interface AppConfig {
     };
   };
   readonly adminAuth: {
+    readonly adminKey: string;
     readonly cookieName: string;
     readonly ttlHours: number;
     readonly devBootstrapEnabled: boolean;

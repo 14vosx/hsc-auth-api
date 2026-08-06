@@ -4,7 +4,7 @@ import { AdminSessionRepository } from "./admin-session.repository.js";
 import { parseCookieHeader } from "./parse-cookie-header.js";
 
 export interface AdminIdentity {
-  via: "session";
+  via: "session" | "admin-key";
   userId: number | null;
   role: string | null;
   email: string | null;
@@ -46,5 +46,29 @@ export class AdminAuthService {
       name: session.name ?? null,
       sessionId: session.sessionId ?? null,
     };
+  }
+
+  async resolveAdmin(
+    cookieHeader?: string,
+    adminKeyHeader?: string,
+  ): Promise<AdminIdentity | null> {
+    const sessionAdmin = await this.resolveSessionAdmin(cookieHeader);
+    if (sessionAdmin) {
+      return sessionAdmin;
+    }
+
+    const configuredKey = this.config.adminAuth.adminKey;
+    if (configuredKey && adminKeyHeader === configuredKey) {
+      return {
+        via: "admin-key",
+        userId: null,
+        role: "admin",
+        email: null,
+        name: null,
+        sessionId: null,
+      };
+    }
+
+    return null;
   }
 }

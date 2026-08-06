@@ -6,6 +6,7 @@ import { HealthModule } from "./health/health.module.js";
 import { ContentNewsModule } from "./content/news/content-news.module.js";
 import { ContentSeasonsModule } from "./content/seasons/content-seasons.module.js";
 import { AdminAuthModule } from "./admin/auth/admin-auth.module.js";
+import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
 
 @Module({})
 export class AppModule {
@@ -19,6 +20,7 @@ export class AppModule {
         ContentNewsModule,
         ContentSeasonsModule,
         AdminAuthModule,
+        AdminSchemaModule,
       ],
     };
   }

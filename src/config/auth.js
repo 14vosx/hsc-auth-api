@@ -18,6 +18,7 @@ export function buildAuthConfig(env = process.env, runtimeConfig = {}) {
   );
 
   return {
+    adminKey: parseString(env.ADMIN_KEY, ""),
     cookieName: parseString(env.ADMIN_SESSION_COOKIE, "hsc_admin_session"),
     ttlHours: parsePositiveInt(
       env.ADMIN_SESSION_TTL_HOURS,
