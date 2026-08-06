@@ -2,8 +2,12 @@
 import mysql from "mysql2/promise";
 
 import { buildAuthConfig } from "../../config/auth.js";
-import { createMagicLinkForUser } from "../../db/magicLinks.js";
-import { deliverMagicLink } from "../../services/auth/magicLinkDelivery.js";
+import {
+  createMagicLinkForUser as createMagicLinkForUserDefault,
+} from "../../db/magicLinks.js";
+import {
+  deliverMagicLink as deliverMagicLinkDefault,
+} from "../../services/auth/magicLinkDelivery.js";
 import { buildMagicLinkRequestOkResponse } from "../../services/auth/magicLinkContract.js";
 
 function normalizeEmail(input) {
@@ -20,7 +24,7 @@ function buildConsumeUrl(publicUrl, rawToken) {
   return `${publicUrl}/auth/magic-link/consume?token=${encodeURIComponent(rawToken)}`;
 }
 
-async function findAdminUserByEmail(dbConfig, email) {
+async function findEligibleAdminByEmailDefault(dbConfig, email) {
   const connection = await mysql.createConnection(dbConfig);
 
   try {
@@ -57,7 +61,14 @@ async function findAdminUserByEmail(dbConfig, email) {
 
 export function registerAuthRequestMagicLinkRoute(
   app,
-  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+  {
+    dbConfig,
+    getDbReady,
+    authConfig = buildAuthConfig(),
+    findEligibleAdminByEmail = findEligibleAdminByEmailDefault,
+    createMagicLinkForUser = createMagicLinkForUserDefault,
+    deliverMagicLink = deliverMagicLinkDefault,
+  },
 ) {
   async function handler(req, res) {
     if (!getDbReady()) {
@@ -71,7 +82,7 @@ export function registerAuthRequestMagicLinkRoute(
     }
 
     try {
-      const user = await findAdminUserByEmail(dbConfig, email);
+      const user = await findEligibleAdminByEmail(dbConfig, email);
 
       if (!user) {
         return res.status(200).json(buildMagicLinkRequestOkResponse());

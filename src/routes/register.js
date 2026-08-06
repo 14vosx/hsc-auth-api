@@ -52,6 +52,10 @@ export function registerAllRoutes(app, deps) {
     requirePlayer,
     internalApiKey,
 
+    findEligibleAdminByEmail,
+    createMagicLinkForUser,
+    deliverMagicLink,
+
     // utils/helpers
     sendPublic,
     sendBadRequest,
@@ -67,7 +71,14 @@ export function registerAllRoutes(app, deps) {
   registerHealthRoutes(app, { corsMeta, getDbStatus });
   registerAuthSessionRoute(app, { resolveSessionAdmin });
   registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady, authConfig });
-  registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady, authConfig });
+  registerAuthRequestMagicLinkRoute(app, {
+    dbConfig,
+    getDbReady,
+    authConfig,
+    findEligibleAdminByEmail,
+    createMagicLinkForUser,
+    deliverMagicLink,
+  });
   registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady, authConfig });
   registerPlayerSteamAuthRoutes(app, {
     getDbReady,
