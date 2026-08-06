@@ -1,19 +1,47 @@
 # AGENTS.md — HSC Auth API
 
-## Project context
+**Versão:** 2.1
+**Data:** 2026-08-06
+**Repositório:** `14vosx/hsc-auth-api`
 
-This repository contains the HSC Auth API.
+## 1. Finalidade e autoridade
 
-Repository:
+Este arquivo define as regras operacionais para agentes de IA que atuem neste repositório.
+
+Ordem de autoridade:
+
+1. instrução explícita do responsável humano pelo projeto;
+2. documento de Gate ou especificação aprovada para a tarefa atual;
+3. este `AGENTS.md`;
+4. documentação local do repositório;
+5. convenções existentes no código.
+
+Em caso de conflito, o agente deve parar, explicar o conflito de forma objetiva e solicitar decisão humana.
+
+O responsável humano pelo projeto é a autoridade final sobre:
+
+- arquitetura;
+- produto;
+- segurança;
+- contratos;
+- infraestrutura;
+- dados;
+- deploy;
+- release;
+- rollback;
+- Git;
+- custos;
+- priorização.
+
+## 2. Contexto do projeto
+
+O `hsc-auth-api` é a API de autenticação e conteúdo do HSC.
+
+Stack principal:
 
 ```text
-hsc-auth-api
-```
-
-Runtime stack:
-
-```text
-Node.js
+Node.js 22
+ES Modules
 Express
 MySQL/MariaDB via mysql2
 SQL migrations
@@ -25,9 +53,10 @@ Player-facing Bunker APIs
 Steam Profiles cache
 ```
 
-Current important areas:
+Áreas relevantes:
 
 ```text
+index.js
 src/config
 src/db
 src/middlewares
@@ -40,17 +69,7 @@ ops
 docs
 ```
 
-## Agent role
-
-Codex should act as an implementation assistant for scoped backend tasks.
-
-Codex may edit code, migrations, tests/smokes, and local documentation when the task is explicit.
-
-Codex must not make architecture, deployment, release, infrastructure, security, product, billing, or production-data decisions independently.
-
-## Current product/runtime boundaries
-
-The Auth API currently serves multiple bounded concerns:
+Responsabilidades atuais:
 
 ```text
 Admin Auth
@@ -59,192 +78,235 @@ News/Seasons content APIs
 Steam Profiles cache
 Player Auth
 Player Bunker authenticated gateway
+Uploads controlados pela Auth API
 ```
 
-Admin Auth and Player Auth are separate concepts and must remain separate unless a human explicitly approves a design change.
-
-Do not reuse Admin Auth cookies, guards, tables, or RBAC semantics for Player Auth.
-
-Do not reuse Player Auth cookies or player session semantics for Admin Auth.
-
-## Player Auth / Bunker boundaries
-
-Player Auth is Steam-first.
-
-Known player-facing routes include:
+Este repositório não é:
 
 ```text
-GET  /player/me
-GET  /player/bunker/summary
-POST /player/auth/logout
-GET  /player/auth/steam/start
-GET  /player/auth/steam/callback
+Portal Angular
+Backoffice Angular
+ETL da Static API
+servidor CS2
+MatchZy
+infraestrutura AWS
+configuração Nginx/systemd/DNS/TLS
 ```
 
-The Player Auth cookie is separate from the admin session cookie.
+### 2.1. Arquitetura-alvo aprovada
 
-Known player session cookie:
+A arquitetura-alvo do `hsc-auth-api` é:
 
 ```text
-hsc_player_session
+NestJS 11
+TypeScript strict
+Express adapter inicialmente
+monólito modular
+MariaDB
+mysql2
+SQL migrations existentes
+contratos HTTP preservados
 ```
 
-Rules:
+A adoção será incremental e orientada por Gates específicos.
+
+Regras:
+
+- o runtime Express atual permanece válido até a migração alcançar paridade suficiente;
+- não realizar reescrita big bang;
+- não introduzir microserviços apenas por causa da migração;
+- não trocar simultaneamente banco, driver, migrations e framework;
+- não alterar cookies, sessões, rotas, status codes ou payloads como efeito colateral;
+- criar testes de caracterização antes de migrar domínios críticos;
+- migrar Admin Auth, Player Auth e Player Bunker somente com critérios de paridade explícitos;
+- implementar pagamentos e entitlements apenas após a fundação NestJS estar aprovada e suficientemente estável;
+- decisões detalhadas de arquitetura devem ser registradas em ADR ou documento de Gate próprio.
+
+Até que um Gate de migração autorize alterações, tarefas no runtime Express devem corrigir e estabilizar a implementação atual sem antecipar uma refatoração ampla para NestJS.
+
+## 3. Modelo operacional do projeto
+
+### 3.1. Responsável humano
+
+O responsável humano:
+
+- aprova decisões;
+- executa comandos de alto impacto;
+- executa validações pesadas quando orientado;
+- executa migrations locais quando necessário;
+- executa `commit`, `push`, abertura de PR, merge, deploy e rollback;
+- decide quando um Gate pode ser iniciado ou encerrado.
+
+### 3.2. Antigravity
+
+O Antigravity é o agente principal de implementação.
+
+Pode, dentro de escopo explícito:
+
+- produzir código;
+- refatorar código;
+- corrigir bugs;
+- criar ou ajustar testes;
+- criar ou atualizar documentação local;
+- realizar pequenas melhorias estruturais;
+- preparar patches revisáveis;
+- inspecionar arquivos necessários à tarefa.
+
+Não pode decidir ou executar independentemente:
+
+- arquitetura;
+- contratos públicos;
+- política de autenticação;
+- segurança;
+- modelo de dados;
+- infraestrutura;
+- deploy;
+- release;
+- rollback;
+- custos;
+- produto;
+- billing;
+- dados de produção.
+
+### 3.3. Outros agentes
+
+Qualquer outro agente que atue no repositório deve seguir as mesmas regras atribuídas ao Antigravity.
+
+Nenhum agente recebe permissão implícita apenas por possuir acesso técnico a uma ferramenta.
+
+## 4. Economia de execução e disciplina de tokens
+
+Este é um projeto mantido por um desenvolvedor solo. O agente deve otimizar tempo, custo e contexto.
+
+### 4.1. Regra principal
+
+Não executar processos caros, demorados, ruidosos ou com grande volume de saída sem necessidade direta e aprovação.
+
+Quando uma validação puder consumir muitos tokens ou gerar logs extensos, o agente deve:
+
+1. explicar por que a validação é necessária;
+2. fornecer o comando exato;
+3. indicar o ambiente em que o comando deve ser executado;
+4. informar o resultado esperado;
+5. pedir apenas o trecho relevante do output.
+
+### 4.2. Processos normalmente executados pelo humano
+
+Por padrão, o agente deve orientar o humano a executar:
 
 ```text
-do not print player cookies
-do not print session tokens
-do not print token hashes
-do not log Steam callback query strings with sensitive values
-do not expose session storage internals
-do not mix player and admin auth middleware
+npm ci
+npm test completo
+npm run db:migrate
+npm start para validação manual
+docker compose build
+docker compose up
+docker logs extensos
+testes de integração amplos
+smokes completos
+scans de segurança
+auditorias de dependências
+comandos que percorrem o repositório inteiro
+comandos que geram diffs ou logs muito grandes
+qualquer comando remoto
 ```
 
-## Player Bunker data boundary
+O agente pode executar apenas verificações rápidas, locais, direcionadas e com output limitado quando isso for necessário para produzir um patch correto.
 
-The Auth API is the authenticated gateway for the Player Bunker.
+### 4.3. Inspeção eficiente
 
-The Auth API may:
+O agente deve:
+
+- abrir somente os arquivos necessários;
+- preferir buscas por símbolo, função, rota ou configuração;
+- evitar despejar diretórios inteiros;
+- evitar reler arquivos já conhecidos sem motivo;
+- evitar repetir o mesmo teste;
+- evitar executar a suíte completa durante cada microalteração;
+- usar testes direcionados antes de testes amplos;
+- resumir resultados em vez de reproduzir logs extensos.
+
+### 4.4. Comunicação de comandos
+
+Ao pedir execução humana, sempre informar:
 
 ```text
-authenticate the player
-resolve the authenticated SteamID64
-read prepared player/season artifacts
-sanitize artifact data
-return defensive Bunker responses
-augment responses with safe identity/profile fields when the source is explicit
+Ambiente
+Diretório
+Comando exato
+Impacto esperado
+Resultado esperado
+Trecho do output que deve ser retornado
 ```
 
-The Auth API must not:
+Preferir um comando ou uma microetapa por vez quando houver risco, decisão ou possibilidade de falha.
+
+## 5. Ambiente local canônico
+
+Ambiente local aprovado:
 
 ```text
-calculate competitive stats as a new source of truth
-recalculate ranking
-recalculate score
-recalculate prize eligibility
-infer Season membership
-mutate ETL artifacts
-publish ETL artifacts
-read MatchZy DB directly
-query the CS2 game server directly
+Windows
+WSL 2
+Ubuntu 24.04 LTS
+usuário Linux: hscuser
+workspace: /home/hscuser/workspace
+repositório: /home/hscuser/workspace/hsc-auth-api
+Node.js: 22.22.0 via NVM no WSL
+npm: 10.9.4 via NVM no WSL
+Docker Desktop com integração WSL
 ```
 
-The ETL owns competitive stats materialization.
+Regras:
 
-The Portal owns presentation.
+- trabalhar no filesystem Linux;
+- não desenvolver o projeto em `/mnt/c`;
+- não usar Node.js ou npm do Windows dentro do WSL;
+- não usar caminhos de `nvm4w`;
+- não instalar Docker Engine dentro do WSL quando o Docker Desktop já estiver integrado;
+- não executar comandos contra produção por padrão.
 
-The Auth API owns authenticated access and safe response shaping.
+## 6. Fluxo Git
 
-## Artifact boundary
+Todo trabalho deve ocorrer em branch específica.
 
-Player Bunker artifacts are generated outside this repository by `hsc-cs2-etl`.
+Antes de iniciar uma implementação:
 
-The Auth API reads artifacts in read-only mode.
-
-Relevant environment variables:
-
-```text
-PLAYER_BUNKER_ARTIFACT_ROOT
-PLAYER_BUNKER_ACTIVE_SEASON_SLUG
+```bash
+git status --short --branch
+git fetch origin --prune
+git rev-parse HEAD origin/main
 ```
 
-Expected artifact layout:
+Regras:
 
-```text
-<PLAYER_BUNKER_ARTIFACT_ROOT>/season/<slug>/players-manifest.json
-<PLAYER_BUNKER_ARTIFACT_ROOT>/season/<slug>/player/<steamid64>.json
+- partir de `main` limpa;
+- confirmar o SHA-base;
+- não alterar arquivos não relacionados;
+- não fazer `commit` automaticamente;
+- não fazer `push` automaticamente;
+- não abrir PR automaticamente;
+- não fazer merge automaticamente;
+- não criar tags;
+- não executar `reset --hard`;
+- não executar rebase;
+- não executar force push;
+- não apagar branches;
+- não sobrescrever trabalho local.
+
+Antes de o humano criar commit, o agente deve orientar:
+
+```bash
+git status --short
+git diff --check
+git diff --stat
 ```
 
-Rules:
+O agente deve fornecer os comandos de `commit` e `push`, mas o humano os executa.
 
-```text
-do not write to artifact root
-do not delete artifact files
-do not assume artifact root is inside this repo
-do not assume artifact root exists in production
-do not expose local filesystem paths in public responses unless already part of a safe diagnostic
-validate path traversal protections when touching loaders
-sanitize artifact payloads before returning them
-```
+## 7. Escopo permitido
 
-If the artifact is missing, malformed, or not configured, return a safe fallback rather than breaking Player Auth.
-
-## MVP2 Bunker enrichment rules
-
-The next approved product direction is MVP2 — Bunker Melhorado.
-
-Goal:
-
-```text
-enrich GET /player/bunker/summary with relevant data already available in the HSC ecosystem
-```
-
-Allowed direction:
-
-```text
-preserve the existing /player/bunker/summary contract
-add fields defensively and retrocompatibly
-include Steam avatar/profile when a safe source exists
-optionally include a competitiveProfile block from an explicit Static API v2 source
-keep seasonPlayer as the Season-scoped artifact payload
-keep lifetime/profile data separate from Season data
-use short timeouts and safe fallback for optional external/static profile reads
-```
-
-Not allowed in MVP2 without explicit approval:
-
-```text
-billing
-subscriptions
-entitlements
-subdomain bunker
-cutoff from /portal/cs2-next to /portal/cs2
-Angular Material migration
-new backend service
-new ranking formula
-new stats database
-production deploy
-production migrations
-Nginx/systemd changes
-```
-
-When enriching Bunker responses, clearly distinguish:
-
-```text
-player identity
-authenticated session state
-seasonPlayer stats
-competitiveProfile/lifetime stats
-derived presentation-only fields
-```
-
-## Secret and environment safety
-
-A local `.env` file may exist in this repository.
-
-Treat `.env` as secret material.
-
-Do not:
-
-```text
-read .env unless explicitly instructed
-print .env contents
-copy .env contents
-commit .env
-rename .env
-delete .env
-generate examples from real .env values
-```
-
-Use `.env.local.example` as the safe reference for environment variable names.
-
-If environment context is required, ask the human to provide sanitized values.
-
-Systemd drop-ins, production `.env` files, Steam API keys, DB credentials, cookies, and callback URLs with tokens are production-sensitive.
-
-## Allowed work
-
-Codex may work on:
+Dentro de uma tarefa explícita, o agente pode trabalhar em:
 
 ```text
 Express route handlers
@@ -252,62 +314,61 @@ request validation
 response shaping
 service functions
 database access modules
-SQL migrations for local review
+configuração da aplicação
+bootstrap da aplicação
+SQL migrations para revisão local
+testes unitários
+testes de integração local
 local smoke scripts
-small refactors
-bug fixes
-documentation updates
+pequenas refatorações
+correções de bugs
+documentação em docs/**
+README e AGENTS.md quando solicitado
 ```
 
-Codex may inspect:
+O agente pode inspecionar:
 
 ```text
 package.json
+package-lock.json
 index.js
 src/**
 db/migrations/**
 scripts/**
 docs/**
-ops/*.sh only for understanding
+ops/*.sh apenas para entendimento
+docker-compose.yml apenas para entendimento
 ```
 
-For Player Bunker tasks, relevant areas may include:
+## 8. Trabalho proibido sem aprovação explícita
 
-```text
-src/routes/player/**
-src/middlewares/player-session**
-src/config/playerAuth*
-src/config/playerBunker*
-src/config/playerSteamAuth*
-src/db/player*
-src/services/player-bunker/**
-docs/player-*
-ops/player-*
-```
-
-## Forbidden work without explicit approval
-
-Do not change or execute production-sensitive operations without explicit approval.
-
-Forbidden by default:
+Não executar ou modificar por padrão:
 
 ```text
 deploy
 release
 rollback
-tag creation
-GitHub Actions changes
-systemd changes
-Nginx changes
-remote SSH commands
-production database commands
-production migrations
-production smoke execution
-secret rotation
-DNS/TLS/firewall changes
+produção
+AWS Lightsail
+SSH remoto
+DNS
+TLS
+firewall
+Nginx
+systemd
+banco de produção
+migrations de produção
+dados reais de produção
+segredos
+GitHub Actions
+tags
+chaves
+credenciais
+rotação de segredo
+alteração de custo de infraestrutura
 ```
 
-Do not modify these files unless the task explicitly asks for it:
+Não modificar sem pedido explícito:
 
 ```text
 .github/workflows/**
@@ -317,182 +378,373 @@ ops/deploy-local.sh
 docker-compose.yml
 ```
 
-Read-only review of those files is allowed when relevant.
+A leitura desses arquivos é permitida quando necessária para entender o projeto.
 
-## API contract rules
+## 9. Segurança e variáveis de ambiente
 
-Do not change existing API contracts unless explicitly requested.
+Arquivos `.env` são material secreto.
 
-This includes:
-
-```text
-auth routes
-admin routes
-content routes
-health route
-player routes
-cookie/session behavior
-magic link behavior
-admin authorization behavior
-player authorization behavior
-Steam callback behavior
-Bunker response shape
-```
-
-When adding or changing a response field, route, status code, or validation rule, call it out explicitly.
-
-For `/player/bunker/summary`, preserve backward compatibility unless the human explicitly approves a breaking contract change.
-
-If a requested feature needs a contract decision, stop and ask.
-
-## Database and migration rules
-
-Database changes must be deliberate and reviewable.
-
-When touching migrations:
+O agente não deve:
 
 ```text
-use a new numbered migration
-do not edit applied migrations unless explicitly instructed
-preserve backwards compatibility when possible
-document the reason for the migration
+ler .env sem instrução explícita
+imprimir .env
+copiar .env
+resumir valores reais de .env
+gerar exemplos a partir de .env real
+commitar .env
+renomear .env
+apagar .env
+expor tokens
+expor cookies
+expor chaves
+expor senhas
+expor hashes de sessão
+expor credenciais de banco
 ```
 
-Before finalizing migration-related work, run or propose:
+Usar `.env.local.example` como referência segura de nomes.
+
+### 9.1. Disciplina de configuração
+
+A aplicação deve preferir configuração centralizada, validada e construída após o carregamento do ambiente.
+
+Evitar:
+
+- leituras dispersas de `process.env`;
+- captura de configuração em constantes de nível superior antes do bootstrap;
+- defaults silenciosos para configurações obrigatórias;
+- logs com valores sensíveis;
+- mensagens de erro que revelem segredos.
+
+Variáveis fornecidas pelo processo devem prevalecer sobre arquivos de ambiente.
+
+Falhas de configuração obrigatória devem interromper o startup com mensagem sanitizada e código de saída diferente de zero.
+
+## 10. Fronteiras de autenticação
+
+Admin Auth e Player Auth são conceitos separados.
+
+Não reutilizar entre eles:
+
+```text
+cookies
+guards
+middlewares
+tabelas
+sessões
+RBAC
+semântica de identidade
+semântica de autorização
+```
+
+Cookie conhecido de Player Auth:
+
+```text
+hsc_player_session
+```
+
+Regras:
+
+- não imprimir cookies;
+- não imprimir tokens;
+- não imprimir hashes;
+- não registrar query strings sensíveis do callback Steam;
+- não expor detalhes internos de armazenamento de sessão;
+- não misturar middleware de Admin Auth e Player Auth.
+
+Mudanças em autenticação, cookies, sessão, Steam identity ou RBAC exigem aprovação humana explícita.
+
+## 11. Fronteira do Player Bunker
+
+A Auth API é o gateway autenticado do Player Bunker.
+
+Pode:
+
+```text
+autenticar o player
+resolver SteamID64 autenticado
+ler artefatos preparados
+sanitizar payloads
+retornar respostas defensivas
+adicionar campos seguros quando a fonte for explícita
+```
+
+Não pode:
+
+```text
+recalcular ranking
+recalcular score
+recalcular prize eligibility
+inferir participação em Season
+mutar artefatos ETL
+publicar artefatos ETL
+ler MatchZy DB diretamente
+consultar o servidor CS2 diretamente
+criar nova fonte de verdade competitiva
+```
+
+O ETL é dono da materialização de estatísticas competitivas.
+
+O Portal é dono da apresentação.
+
+A Auth API é dona do acesso autenticado e da modelagem segura da resposta.
+
+## 12. Fronteira de artefatos
+
+Artefatos do Player Bunker são gerados pelo `hsc-cs2-etl` e lidos em modo somente leitura.
+
+Variáveis relevantes:
+
+```text
+PLAYER_BUNKER_ARTIFACT_ROOT
+PLAYER_BUNKER_ACTIVE_SEASON_SLUG
+PLAYER_BUNKER_STATIC_API_BASE_URL
+PLAYER_BUNKER_STATIC_API_TIMEOUT_MS
+```
+
+Layout esperado:
+
+```text
+<PLAYER_BUNKER_ARTIFACT_ROOT>/season/<slug>/players-manifest.json
+<PLAYER_BUNKER_ARTIFACT_ROOT>/season/<slug>/player/<steamid64>.json
+```
+
+Regras:
+
+- não escrever no artifact root;
+- não apagar artefatos;
+- não assumir que o diretório está dentro do repositório;
+- não assumir que o diretório existe;
+- validar path traversal;
+- sanitizar payloads;
+- usar fallback seguro para ausência, erro ou configuração incompleta;
+- não expor caminhos locais em respostas públicas.
+
+## 13. Contratos HTTP
+
+Não alterar contratos HTTP existentes sem aprovação explícita.
+
+Isso inclui:
+
+```text
+rotas
+métodos
+status codes
+campos obrigatórios
+response shape
+cookies
+sessões
+autorização
+fluxo magic link
+fluxo Steam
+Player Bunker
+health
+admin APIs
+content APIs
+```
+
+Adições retrocompatíveis também devem ser destacadas para revisão.
+
+Se uma implementação exigir decisão de contrato, o agente deve parar antes de alterar o código.
+
+## 14. Banco de dados e migrations
+
+Mudanças de banco devem ser deliberadas e revisáveis.
+
+Regras:
+
+- criar migration nova e numerada;
+- não editar migration já aplicada;
+- não presumir acesso à produção;
+- não executar migration de produção;
+- não mudar semântica de identidade ou sessão sem aprovação;
+- documentar a razão da migration;
+- preservar compatibilidade quando possível.
+
+Validação de migration deve ocorrer apenas em ambiente local/dev e, por padrão, ser executada pelo humano:
 
 ```bash
 npm run db:migrate
 ```
 
-Only run migrations against a local/dev database unless explicitly instructed otherwise.
+## 15. Dependências
 
-Do not assume production database access.
+Não adicionar, remover ou atualizar dependências sem aprovação explícita.
 
-For Player Auth tables, do not change account/session/identity semantics without explicit approval.
+Não executar automaticamente:
 
-## Local development
-
-Install dependencies with:
-
-```bash
-npm ci
+```text
+npm audit fix
+npm update
+npm install <nova-dependencia>
+npm install -g
+alteração de major version
+regeneração desnecessária de package-lock.json
 ```
 
-Run the API locally with:
+Vulnerabilidades encontradas devem ser registradas separadamente, sem misturar sua correção com uma tarefa não relacionada.
+
+## 16. Docker e banco local
+
+Antes de usar Docker:
+
+1. inspecionar `docker-compose.yml`;
+2. confirmar portas, volumes e variáveis;
+3. confirmar que todos os destinos são locais;
+4. explicar o plano;
+5. fornecer o comando ao humano.
+
+Não subir containers automaticamente quando a tarefa puder ser resolvida por inspeção estática.
+
+Não conectar containers locais a produção.
+
+## 17. Estratégia de validação
+
+A validação deve ser proporcional à mudança.
+
+Ordem preferencial:
+
+1. inspeção estática direcionada;
+2. teste unitário direcionado;
+3. teste de integração local direcionado;
+4. smoke local relevante;
+5. suíte completa, apenas quando necessária;
+6. validação manual da aplicação, apenas quando necessária.
+
+Não executar repetidamente a suíte completa durante a implementação.
+
+Exemplos de comandos que podem ser fornecidos ao humano:
 
 ```bash
+node --test caminho/do/teste.test.js
+npm test
+npm run db:migrate
 npm start
-```
-
-Run migrations locally with:
-
-```bash
-npm run db:migrate
-```
-
-If Docker is needed for local DB, inspect `docker-compose.yml` first and explain the plan before running commands.
-
-## Validation
-
-For code changes, run the most relevant local validation available.
-
-Baseline commands:
-
-```bash
-npm run db:migrate
-npm start
-```
-
-If there are smoke scripts relevant to the task, prefer local smoke scripts only, for example:
-
-```bash
 ops/smoke-local.sh
 ops/smoke-baseline.sh
-ops/player-bunker-artifact-summary-smoke.sh
 ```
 
-Do not run deploy/release scripts as validation.
+Não usar scripts de deploy ou release como validação.
 
-Do not run production smoke tests unless explicitly instructed.
+Não executar smoke de produção sem aprovação explícita.
 
-Always report:
+## 18. Documentação
 
-```text
-commands run
-result
-warnings/errors
-git status --short
-git diff --stat
-```
-
-## Git workflow
-
-Work on a feature branch.
-
-Before committing, verify:
-
-```bash
-git status --short
-git diff --check
-git diff --stat
-```
-
-Do not commit secrets or local `.env`.
-
-Do not alter unrelated files.
-
-Prefer focused commits.
-
-## Documentation
-
-Repository-local docs live in:
+Documentação local vive em:
 
 ```text
 docs/**
 ```
 
-Project-wide canonical documentation lives in the separate `hsc-docs` repository.
+Documentação canônica do ecossistema pode existir em `hsc-docs`, mas não deve ser presumida como disponível.
 
-Do not assume access to `hsc-docs` from this workspace.
+Ao alterar comportamento:
 
-If context from `hsc-docs` is needed, ask the human to provide or open it.
+- atualizar documentação local relevante;
+- documentar configuração por nomes, nunca por valores reais;
+- não transformar documentação em log de implementação;
+- manter documentação orientada ao comportamento atual;
+- evitar duplicação desnecessária.
 
-When implementing Player Bunker changes, keep repository-local docs aligned with the actual route/config behavior.
+## 19. Estilo de implementação
 
-## Implementation style
+Preferir:
 
-Prefer small, explicit changes.
+- mudanças pequenas;
+- diffs focados;
+- funções explícitas;
+- handlers finos;
+- serviços reutilizáveis quando já houver repetição;
+- validação centralizada;
+- nomes claros;
+- compatibilidade retroativa;
+- erros sanitizados;
+- testes direcionados;
+- documentação curta e precisa.
 
-Avoid broad rewrites.
+Evitar:
 
-Keep route handlers thin when possible.
+- grandes reescritas;
+- abstração prematura;
+- alteração incidental;
+- dependências novas;
+- formatação massiva;
+- renomeações sem necessidade;
+- mistura de múltiplos objetivos no mesmo diff;
+- mudanças de contrato escondidas.
 
-Prefer shared services/utilities for repeated behavior, but do not over-abstract prematurely.
+## 20. Relatório obrigatório do agente
 
-Use existing code style and module patterns.
-
-Do not add dependencies without explicit approval.
-
-For optional external/static API reads, use explicit config, short timeouts, safe fallback, and tests/smokes that do not require production secrets.
-
-## Stop and ask when
-
-Stop and ask the human when the task involves:
+Ao concluir uma microetapa de implementação, informar de forma objetiva:
 
 ```text
-architecture decisions
-new public API contract
-auth/security policy
-RBAC policy
-Player Auth policy
-cookie/session semantics
-Steam identity semantics
-database schema tradeoffs
-billing/subscriptions/entitlements
-production data
-deploy/release
-rollback
-infra changes
-secrets
-third-party service configuration
+arquivos lidos
+arquivos alterados
+o que mudou
+decisões tomadas
+decisões pendentes
+comandos executados pelo agente
+comandos que o humano deve executar
+resultado esperado
+warnings ou riscos
+git status --short
+git diff --stat
 ```
+
+Não despejar logs extensos nem reproduzir arquivos completos quando um resumo for suficiente.
+
+## 21. Gates e pontos de parada
+
+Cada Gate deve ter:
+
+```text
+escopo
+pré-condições
+critérios de aceite
+validação
+ponto de aprovação
+```
+
+Não iniciar o próximo Gate automaticamente.
+
+O agente deve parar e pedir decisão humana quando a tarefa envolver:
+
+```text
+arquitetura
+contrato público
+auth
+security policy
+RBAC
+cookies
+sessões
+Steam identity
+database schema tradeoff
+billing
+subscriptions
+entitlements
+produção
+infraestrutura
+deploy
+release
+rollback
+segredos
+dados reais
+terceiros
+custos
+mudança de escopo
+```
+
+## 22. Regra final
+
+O objetivo do agente é produzir uma mudança correta, pequena, revisável e economicamente eficiente.
+
+Velocidade não justifica:
+
+- gastar contexto desnecessariamente;
+- executar processos pesados sem necessidade;
+- tomar decisões não autorizadas;
+- misturar escopos;
+- alterar produção;
+- expor segredos;
+- quebrar contratos.
