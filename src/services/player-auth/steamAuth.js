@@ -1,9 +1,5 @@
 // src/services/player-auth/steamAuth.js
-import {
-  PLAYER_STEAM_LOGIN_URL,
-  PLAYER_STEAM_REALM,
-  PLAYER_STEAM_RETURN_URL,
-} from "../../config/playerSteamAuth.js";
+import { buildPlayerSteamAuthConfig } from "../../config/playerSteamAuth.js";
 
 const OPENID_IDENTIFIER_SELECT =
   "http://specs.openid.net/auth/2.0/identifier_select";
@@ -33,13 +29,16 @@ export function buildSteamAuthUnavailablePayload() {
   return { ok: false, error: "steam_auth_not_implemented" };
 }
 
-export function buildSteamOpenIdStartUrl() {
-  const url = new URL(PLAYER_STEAM_LOGIN_URL);
+export function buildSteamOpenIdStartUrl(
+  playerSteamAuthConfig = buildPlayerSteamAuthConfig(),
+) {
+  const config = { ...buildPlayerSteamAuthConfig(), ...playerSteamAuthConfig };
+  const url = new URL(config.loginUrl);
 
   url.searchParams.set("openid.ns", "http://specs.openid.net/auth/2.0");
   url.searchParams.set("openid.mode", "checkid_setup");
-  url.searchParams.set("openid.return_to", PLAYER_STEAM_RETURN_URL);
-  url.searchParams.set("openid.realm", PLAYER_STEAM_REALM);
+  url.searchParams.set("openid.return_to", config.returnUrl);
+  url.searchParams.set("openid.realm", config.realm);
   url.searchParams.set("openid.identity", OPENID_IDENTIFIER_SELECT);
   url.searchParams.set("openid.claimed_id", OPENID_IDENTIFIER_SELECT);
 
@@ -97,9 +96,12 @@ function hasValidSteamOpenIdResponse(text) {
 
 export async function verifySteamOpenIdCallback(query, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const expectedReturnUrl =
-    options.expectedReturnUrl ?? PLAYER_STEAM_RETURN_URL;
-  const steamLoginUrl = options.steamLoginUrl ?? PLAYER_STEAM_LOGIN_URL;
+  const config = {
+    ...buildPlayerSteamAuthConfig(),
+    ...(options.playerSteamAuthConfig || {}),
+  };
+  const expectedReturnUrl = options.expectedReturnUrl ?? config.returnUrl;
+  const steamLoginUrl = options.steamLoginUrl ?? config.loginUrl;
   const callback = readSteamCallbackQuery(query);
 
   if (callback.mode !== "id_res") {

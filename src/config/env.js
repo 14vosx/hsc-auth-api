@@ -2,5 +2,8 @@
 import dotenv from "dotenv";
 
 export function loadEnv() {
-  dotenv.config({ path: process.env.ENV_FILE || ".env" });
+  dotenv.config({
+    path: process.env.ENV_FILE || ".env",
+    quiet: true,
+  });
 }

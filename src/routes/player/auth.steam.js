@@ -1,11 +1,7 @@
 // src/routes/player/auth.steam.js
-import {
-  PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED,
-  PLAYER_AUTH_FAILURE_REDIRECT_URL,
-  PLAYER_AUTH_SUCCESS_REDIRECT_URL,
-  PLAYER_STEAM_AUTH_ENABLED,
-} from "../../config/playerSteamAuth.js";
-import { PLAYER_SESSION_TTL_HOURS } from "../../config/playerAuth.js";
+import { buildPlayerSteamAuthConfig } from "../../config/playerSteamAuth.js";
+import { buildPlayerAuthConfig } from "../../config/playerAuth.js";
+import { buildAuthConfig } from "../../config/auth.js";
 import { resolveOrCreatePlayerAccountFromSteamId } from "../../db/playerAccounts.js";
 import { createPlayerSessionForAccount } from "../../db/playerSessions.js";
 import {
@@ -15,29 +11,38 @@ import {
 } from "../../services/player-auth/steamAuth.js";
 import { buildPlayerSessionCookie } from "../../utils/playerSessionCookie.js";
 
-function shouldRedirectAfterPlayerAuth() {
-  return PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED === true;
-}
+export function registerPlayerSteamAuthRoutes(
+  app,
+  {
+    getDbReady,
+    dbConfig,
+    playerSteamAuthConfig = buildPlayerSteamAuthConfig(),
+    playerAuthConfig = buildPlayerAuthConfig(),
+    authConfig = buildAuthConfig(),
+  },
+) {
+  function shouldRedirectAfterPlayerAuth() {
+    return playerSteamAuthConfig.callbackRedirectEnabled === true;
+  }
 
-function redirectPlayerAuthFailure(res) {
-  return res.redirect(PLAYER_AUTH_FAILURE_REDIRECT_URL);
-}
+  function redirectPlayerAuthFailure(res) {
+    return res.redirect(playerSteamAuthConfig.failureRedirectUrl);
+  }
 
-function redirectPlayerAuthSuccess(res) {
-  return res.redirect(PLAYER_AUTH_SUCCESS_REDIRECT_URL);
-}
+  function redirectPlayerAuthSuccess(res) {
+    return res.redirect(playerSteamAuthConfig.successRedirectUrl);
+  }
 
-export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
   app.get("/player/auth/steam/start", async (req, res) => {
     if (!getDbReady()) {
       return res.status(503).json({ ok: false, error: "db_not_ready" });
     }
 
-    if (!PLAYER_STEAM_AUTH_ENABLED) {
+    if (!playerSteamAuthConfig.enabled) {
       return res.status(501).json(buildSteamAuthUnavailablePayload());
     }
 
-    return res.redirect(buildSteamOpenIdStartUrl());
+    return res.redirect(buildSteamOpenIdStartUrl(playerSteamAuthConfig));
   });
 
   app.get("/player/auth/steam/callback", async (req, res) => {
@@ -45,11 +50,13 @@ export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
       return res.status(503).json({ ok: false, error: "db_not_ready" });
     }
 
-    if (!PLAYER_STEAM_AUTH_ENABLED) {
+    if (!playerSteamAuthConfig.enabled) {
       return res.status(501).json(buildSteamAuthUnavailablePayload());
     }
 
-    const result = await verifySteamOpenIdCallback(req.query);
+    const result = await verifySteamOpenIdCallback(req.query, {
+      playerSteamAuthConfig,
+    });
 
     if (!result.ok) {
       if (shouldRedirectAfterPlayerAuth()) {
@@ -95,7 +102,7 @@ export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
       session = await createPlayerSessionForAccount(
         dbConfig,
         accountResult.playerAccountId,
-        PLAYER_SESSION_TTL_HOURS,
+        playerAuthConfig.ttlHours,
       );
     } catch {
       if (shouldRedirectAfterPlayerAuth()) {
@@ -107,7 +114,10 @@ export function registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig }) {
         .json({ ok: false, error: "player_session_issue_failed" });
     }
 
-    res.setHeader("Set-Cookie", buildPlayerSessionCookie(session.rawToken));
+    res.setHeader(
+      "Set-Cookie",
+      buildPlayerSessionCookie(session.rawToken, playerAuthConfig, authConfig.publicUrl),
+    );
 
     if (shouldRedirectAfterPlayerAuth()) {
       return redirectPlayerAuthSuccess(res);

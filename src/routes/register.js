@@ -31,13 +31,16 @@ import { registerAuthRequestMagicLinkRoute } from "./auth/request-magic-link.js"
 import { registerAuthConsumeMagicLinkRoute } from "./auth/consume-magic-link.js";
 import { registerInternalSteamProfilesResolveRoute } from "./internal/steam/profiles.resolve.js";
 
-
 export function registerAllRoutes(app, deps) {
   const {
     corsMeta,
     getDbStatus,
     getDbReady,
     uploadsConfig,
+    authConfig,
+    playerAuthConfig,
+    playerSteamAuthConfig,
+    playerBunkerConfig,
 
     dbConfig,
     seasonsRepo,
@@ -47,7 +50,6 @@ export function registerAllRoutes(app, deps) {
     resolveSessionAdmin,
     requireAdmin,
     requirePlayer,
-    adminKey,
     internalApiKey,
 
     // utils/helpers
@@ -64,13 +66,23 @@ export function registerAllRoutes(app, deps) {
 
   registerHealthRoutes(app, { corsMeta, getDbStatus });
   registerAuthSessionRoute(app, { resolveSessionAdmin });
-  registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady });
-  registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady });
-  registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady });
-  registerPlayerSteamAuthRoutes(app, { getDbReady, dbConfig });
-  registerPlayerLogoutRoute(app, { dbConfig });
+  registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady, authConfig });
+  registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady, authConfig });
+  registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady, authConfig });
+  registerPlayerSteamAuthRoutes(app, {
+    getDbReady,
+    dbConfig,
+    playerSteamAuthConfig,
+    playerAuthConfig,
+    authConfig,
+  });
+  registerPlayerLogoutRoute(app, { dbConfig, playerAuthConfig, authConfig });
   registerPlayerMeRoute(app, { requirePlayer });
-  registerPlayerBunkerSummaryRoute(app, { requirePlayer, seasonsRepo });
+  registerPlayerBunkerSummaryRoute(app, {
+    requirePlayer,
+    seasonsRepo,
+    playerBunkerConfig,
+  });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });
   registerContentSeasonsRoutes(app, {
     seasonsRepo,

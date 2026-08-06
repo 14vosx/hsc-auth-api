@@ -1,20 +1,30 @@
 // src/config/playerBunker.js
+import { parseString, parsePositiveInt, parseAbsoluteUrl } from "./helpers.js";
 
-export const PLAYER_BUNKER_ARTIFACT_ROOT =
-  process.env.PLAYER_BUNKER_ARTIFACT_ROOT || "";
+export function buildPlayerBunkerConfig(env = process.env) {
+  const artifactRoot = parseString(env.PLAYER_BUNKER_ARTIFACT_ROOT, "");
+  const activeSeasonSlug = parseString(
+    env.PLAYER_BUNKER_ACTIVE_SEASON_SLUG,
+    "",
+  );
+  const rawBaseUrl = parseString(env.PLAYER_BUNKER_STATIC_API_BASE_URL, "");
+  const staticApiBaseUrl = rawBaseUrl
+    ? parseAbsoluteUrl(
+        rawBaseUrl,
+        "",
+        "PLAYER_BUNKER_STATIC_API_BASE_URL",
+      )
+    : "";
+  const staticApiTimeoutMs = parsePositiveInt(
+    env.PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
+    1500,
+    "PLAYER_BUNKER_STATIC_API_TIMEOUT_MS",
+  );
 
-export const PLAYER_BUNKER_ACTIVE_SEASON_SLUG =
-  process.env.PLAYER_BUNKER_ACTIVE_SEASON_SLUG || "";
-
-export const PLAYER_BUNKER_STATIC_API_BASE_URL =
-  process.env.PLAYER_BUNKER_STATIC_API_BASE_URL || "";
-
-function parsePositiveInt(value, fallback) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  return {
+    artifactRoot,
+    activeSeasonSlug,
+    staticApiBaseUrl,
+    staticApiTimeoutMs,
+  };
 }
-
-export const PLAYER_BUNKER_STATIC_API_TIMEOUT_MS = parsePositiveInt(
-  process.env.PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
-  1500,
-);

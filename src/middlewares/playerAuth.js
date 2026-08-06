@@ -1,16 +1,18 @@
 // src/middlewares/playerAuth.js
-import { PLAYER_SESSION_COOKIE } from "../config/playerAuth.js";
 import { findActivePlayerSessionByToken } from "../db/playerSessions.js";
 import { parseCookieHeader } from "../utils/cookies.js";
 
-export function createPlayerAuth({ dbConfig }) {
+export function createPlayerAuth({
+  dbConfig,
+  playerSessionCookie = "hsc_player_session",
+}) {
   async function resolvePlayer(req) {
     if (req.player) {
       return req.player;
     }
 
     const cookies = parseCookieHeader(req.headers.cookie);
-    const rawToken = cookies[PLAYER_SESSION_COOKIE];
+    const rawToken = cookies[playerSessionCookie];
 
     if (!rawToken) {
       return null;

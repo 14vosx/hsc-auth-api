@@ -1,5 +1,6 @@
 // src/app/context.js
 import { buildDbConfig } from "../config/db.js";
+import { buildAppConfig } from "../config/appConfig.js";
 import { createSeasonsRepo } from "../../seasons.repo.js";
 import { createAdminAuth } from "../middlewares/adminAuth.js";
 import { createPlayerAuth } from "../middlewares/playerAuth.js";
@@ -19,7 +20,7 @@ import {
   validateSeasonPatch,
 } from "../services/seasons/validators.js";
 
-export function createAppContext() {
+export function createAppContext(config = buildAppConfig(process.env)) {
   let dbReady = false;
   let dbError = null;
 
@@ -34,7 +35,9 @@ export function createAppContext() {
     return dbReady;
   }
 
-  const port = Number(process.env.PORT || 3000);
+  const { runtime, adminAuth, playerAuth, playerSteamAuth, playerBunker } =
+    config;
+  const port = runtime.port;
 
   const adminKey = process.env.ADMIN_KEY;
   const internalApiKey = process.env.INTERNAL_API_KEY;
@@ -48,15 +51,25 @@ export function createAppContext() {
   const { resolveSessionAdmin, resolveAdmin, requireAdmin } = createAdminAuth({
     adminKey,
     dbConfig,
+    adminSessionCookie: adminAuth.cookieName,
   });
-  const { resolvePlayer, requirePlayer } = createPlayerAuth({ dbConfig });
+  const { resolvePlayer, requirePlayer } = createPlayerAuth({
+    dbConfig,
+    playerSessionCookie: playerAuth.cookieName,
+  });
 
   return {
     port,
+    config,
 
     routesDeps: {
       getDbStatus,
       getDbReady,
+
+      authConfig: adminAuth,
+      playerAuthConfig: playerAuth,
+      playerSteamAuthConfig: playerSteamAuth,
+      playerBunkerConfig: playerBunker,
 
       dbConfig,
       seasonsRepo,

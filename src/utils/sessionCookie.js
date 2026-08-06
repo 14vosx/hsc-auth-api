@@ -1,16 +1,25 @@
 // src/utils/sessionCookie.js
-import {
-  ADMIN_SESSION_COOKIE,
-  ADMIN_SESSION_TTL_HOURS,
-  AUTH_API_PUBLIC_URL,
-} from "../config/auth.js";
+import { buildAuthConfig } from "../config/auth.js";
 
-export function buildAdminSessionCookie(rawToken) {
-  const maxAgeSeconds = ADMIN_SESSION_TTL_HOURS * 60 * 60;
-  const isHttps = AUTH_API_PUBLIC_URL.startsWith("https://");
+export function buildAdminSessionCookie(rawToken, authConfig = buildAuthConfig()) {
+  const cookieName =
+    authConfig.cookieName ||
+    authConfig.ADMIN_SESSION_COOKIE ||
+    "hsc_admin_session";
+  const ttlHours =
+    authConfig.ttlHours ??
+    authConfig.ADMIN_SESSION_TTL_HOURS ??
+    168;
+  const publicUrl =
+    authConfig.publicUrl ||
+    authConfig.AUTH_API_PUBLIC_URL ||
+    "https://auth-api.haxixesmokeclub.com";
+
+  const maxAgeSeconds = ttlHours * 60 * 60;
+  const isHttps = publicUrl.startsWith("https://");
 
   const parts = [
-    `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(rawToken)}`,
+    `${cookieName}=${encodeURIComponent(rawToken)}`,
     "Path=/",
     "HttpOnly",
     `Max-Age=${maxAgeSeconds}`,

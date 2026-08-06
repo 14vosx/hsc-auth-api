@@ -1,29 +1,13 @@
 import mysql from "mysql2/promise";
 
-import {
-  ADMIN_SESSION_COOKIE,
-  ADMIN_SESSION_TTL_HOURS,
-  AUTH_DEV_BOOTSTRAP_ENABLED,
-  AUTH_DEV_ADMIN_EMAIL,
-  AUTH_DEV_ADMIN_NAME,
-} from "../../config/auth.js";
+import { buildAuthConfig } from "../../config/auth.js";
 import { createSessionForUser } from "../../db/adminSessions.js";
 import { buildAdminSessionCookie } from "../../utils/sessionCookie.js";
 
-function buildCookie(rawToken) {
-  const maxAgeSeconds = ADMIN_SESSION_TTL_HOURS * 60 * 60;
-
-  return [
-    `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(rawToken)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSeconds}`,
-  ].join("; ");
-}
-
-async function ensureLocalAdminUser(dbConfig) {
+async function ensureLocalAdminUser(dbConfig, authConfig) {
   const connection = await mysql.createConnection(dbConfig);
+  const email = authConfig.devAdminEmail;
+  const name = authConfig.devAdminName;
 
   try {
     const [existingRows] = await connection.execute(
@@ -33,7 +17,7 @@ async function ensureLocalAdminUser(dbConfig) {
         WHERE email = ?
         LIMIT 1
       `,
-      [AUTH_DEV_ADMIN_EMAIL],
+      [email],
     );
 
     const existing = existingRows[0];
@@ -46,14 +30,14 @@ async function ensureLocalAdminUser(dbConfig) {
                 display_name = ?
             WHERE id = ?
           `,
-          [AUTH_DEV_ADMIN_NAME, existing.id],
+          [name, existing.id],
         );
       }
 
       return {
         id: existing.id,
-        email: AUTH_DEV_ADMIN_EMAIL,
-        name: AUTH_DEV_ADMIN_NAME,
+        email,
+        name,
         role: "admin",
       };
     }
@@ -63,13 +47,13 @@ async function ensureLocalAdminUser(dbConfig) {
         INSERT INTO users (email, display_name, role)
         VALUES (?, ?, 'admin')
       `,
-      [AUTH_DEV_ADMIN_EMAIL, AUTH_DEV_ADMIN_NAME],
+      [email, name],
     );
 
     return {
       id: result.insertId,
-      email: AUTH_DEV_ADMIN_EMAIL,
-      name: AUTH_DEV_ADMIN_NAME,
+      email,
+      name,
       role: "admin",
     };
   } finally {
@@ -77,9 +61,12 @@ async function ensureLocalAdminUser(dbConfig) {
   }
 }
 
-export function registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady }) {
+export function registerDevBootstrapSessionRoute(
+  app,
+  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+) {
   app.post("/auth/dev/bootstrap-session", async (_req, res) => {
-    if (!AUTH_DEV_BOOTSTRAP_ENABLED) {
+    if (!authConfig.devBootstrapEnabled) {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
@@ -88,14 +75,14 @@ export function registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady }) 
     }
 
     try {
-      const user = await ensureLocalAdminUser(dbConfig);
+      const user = await ensureLocalAdminUser(dbConfig, authConfig);
       const session = await createSessionForUser(
         dbConfig,
         user.id,
-        ADMIN_SESSION_TTL_HOURS,
+        authConfig.ttlHours,
       );
 
-      res.setHeader("Set-Cookie", buildAdminSessionCookie(session.rawToken));
+      res.setHeader("Set-Cookie", buildAdminSessionCookie(session.rawToken, authConfig));
 
       return res.status(200).json({
         ok: true,

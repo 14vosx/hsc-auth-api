@@ -1,6 +1,5 @@
-import fs from "node:fs/promises";
+// scripts/migrate.js
 import path from "node:path";
-import mysql from "mysql2/promise";
 import { fileURLToPath } from "node:url";
 
 import { buildDbConfig } from "../src/config/db.js";
@@ -8,111 +7,54 @@ import {
   loadMigrationEnv,
   MIGRATION_ENV_LOAD_ERROR,
 } from "./migrate-env.js";
+import { runMigrations, MigrationRunnerError } from "./migrationRunner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
-const migrationsDir = path.resolve(__dirname, "../db/migrations");
 
-function isSqlFile(fileName) {
-  return fileName.endsWith(".sql");
-}
+export async function main(options = {}) {
+  const processRef = options.processRef ?? process;
+  const logger = options.logger ?? {
+    error: (msg) =>
+      processRef.stderr
+        ? processRef.stderr.write(msg + "\n")
+        : console.error(msg),
+  };
 
-async function ensureSchemaMigrationsTable(connection) {
-  await connection.execute(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      filename VARCHAR(255) NOT NULL UNIQUE,
-      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
-
-async function getAppliedMigrations(connection) {
-  const [rows] = await connection.execute(`
-    SELECT filename
-    FROM schema_migrations
-    ORDER BY filename ASC
-  `);
-
-  return new Set(rows.map((row) => row.filename));
-}
-
-async function getMigrationFiles() {
-  const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
-
-  return entries
-    .filter((entry) => entry.isFile() && isSqlFile(entry.name))
-    .map((entry) => entry.name)
-    .sort();
-}
-
-async function applyMigration(connection, fileName) {
-  const filePath = path.join(migrationsDir, fileName);
-  const sql = await fs.readFile(filePath, "utf8");
-
-  console.log(`➡️  Applying migration: ${fileName}`);
-
-  await connection.beginTransaction();
-
-  try {
-    await connection.query(sql);
-    await connection.execute(
-      `
-        INSERT INTO schema_migrations (filename)
-        VALUES (?)
-      `,
-      [fileName],
-    );
-
-    await connection.commit();
-    console.log(`✅ Applied: ${fileName}`);
-  } catch (err) {
-    await connection.rollback();
-    throw err;
-  }
-}
-
-async function main() {
   try {
     loadMigrationEnv({ projectRoot });
   } catch (error) {
     if (error?.code === MIGRATION_ENV_LOAD_ERROR) {
-      process.stderr.write("Migration environment could not be loaded.\n");
-      process.exitCode = 1;
+      logger.error("[migration] migration environment load failed");
+      processRef.exitCode = 1;
       return;
     }
-
-    throw error;
+    logger.error("[migration] migration run failed");
+    processRef.exitCode = 1;
+    return;
   }
 
-  const dbConfig = buildDbConfig();
-  const connection = await mysql.createConnection(dbConfig);
-
   try {
-    await ensureSchemaMigrationsTable(connection);
-
-    const applied = await getAppliedMigrations(connection);
-    const files = await getMigrationFiles();
-
-    const pending = files.filter((file) => !applied.has(file));
-
-    if (pending.length === 0) {
-      console.log("✅ No pending migrations.");
-      return;
+    const dbConfig = buildDbConfig();
+    await runMigrations({
+      dbConfig,
+      projectRoot,
+      ...(options.runnerOptions || {}),
+    });
+  } catch (err) {
+    if (err instanceof MigrationRunnerError) {
+      logger.error(err.message);
+    } else {
+      logger.error("[migration] migration run failed");
     }
-
-    for (const file of pending) {
-      await applyMigration(connection, file);
-    }
-
-    console.log("✅ Migration run completed.");
-  } finally {
-    await connection.end();
+    processRef.exitCode = 1;
   }
 }
 
-main().catch((err) => {
-  console.error("❌ Migration run failed:", err);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+) {
+  main();
+}

@@ -1,5 +1,4 @@
 // src/middlewares/adminAuth.js
-import { ADMIN_SESSION_COOKIE } from "../config/auth.js";
 import { findActiveSessionByToken } from "../db/adminSessions.js";
 import { parseCookieHeader } from "../utils/cookies.js";
 
@@ -25,10 +24,14 @@ function buildAdminKeyAdmin() {
   };
 }
 
-export function createAdminAuth({ adminKey, dbConfig }) {
+export function createAdminAuth({
+  adminKey,
+  dbConfig,
+  adminSessionCookie = "hsc_admin_session",
+}) {
   async function resolveSessionAdmin(req) {
     const cookies = parseCookieHeader(req.headers.cookie);
-    const rawToken = cookies[ADMIN_SESSION_COOKIE];
+    const rawToken = cookies[adminSessionCookie];
 
     if (!rawToken) {
       return null;

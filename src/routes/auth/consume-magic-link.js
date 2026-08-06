@@ -1,9 +1,5 @@
 // src/routes/auth/consume-magic-link.js
-import {
-  BACKOFFICE_URL,
-  MAGIC_LINK_CALLBACK_PATH,
-  ADMIN_SESSION_TTL_HOURS,
-} from "../../config/auth.js";
+import { buildAuthConfig } from "../../config/auth.js";
 import { createSessionForUser } from "../../db/adminSessions.js";
 import {
   findUsableMagicLinkByToken,
@@ -19,52 +15,64 @@ import {
   MAGIC_LINK_CALLBACK_ERROR_CONSUME_FAILED,
 } from "../../services/auth/magicLinkContract.js";
 
-function buildCallbackUrl(query = "") {
-  return `${BACKOFFICE_URL}${MAGIC_LINK_CALLBACK_PATH}${query}`;
+function buildCallbackUrl(authConfig, query = "") {
+  return `${authConfig.backofficeUrl}${authConfig.magicLinkCallbackPath}${query}`;
 }
 
-export function registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady }) {
+export function registerAuthConsumeMagicLinkRoute(
+  app,
+  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+) {
   app.get("/auth/magic-link/consume", async (req, res) => {
     if (!getDbReady()) {
       return res.redirect(
-        buildCallbackUrl(`?error=${MAGIC_LINK_CALLBACK_ERROR_DB_NOT_READY}`),
+        buildCallbackUrl(authConfig, `?error=${MAGIC_LINK_CALLBACK_ERROR_DB_NOT_READY}`),
       );
     }
 
     const rawToken = String(req.query?.token || "").trim();
 
     if (!rawToken) {
-      return res.redirect(buildCallbackUrl(`?error=${MAGIC_LINK_CALLBACK_ERROR_MISSING_TOKEN}`));
+      return res.redirect(
+        buildCallbackUrl(authConfig, `?error=${MAGIC_LINK_CALLBACK_ERROR_MISSING_TOKEN}`),
+      );
     }
 
     try {
       const magicLink = await findUsableMagicLinkByToken(dbConfig, rawToken);
 
       if (!magicLink) {
-        return res.redirect(buildCallbackUrl(`?error=${MAGIC_LINK_CALLBACK_ERROR_INVALID_OR_EXPIRED_LINK}`));
+        return res.redirect(
+          buildCallbackUrl(
+            authConfig,
+            `?error=${MAGIC_LINK_CALLBACK_ERROR_INVALID_OR_EXPIRED_LINK}`,
+          ),
+        );
       }
 
       if (magicLink.role !== "admin") {
-        return res.redirect(buildCallbackUrl(`?error=${MAGIC_LINK_CALLBACK_ERROR_FORBIDDEN}`));
+        return res.redirect(
+          buildCallbackUrl(authConfig, `?error=${MAGIC_LINK_CALLBACK_ERROR_FORBIDDEN}`),
+        );
       }
 
       const session = await createSessionForUser(
         dbConfig,
         magicLink.userId,
-        ADMIN_SESSION_TTL_HOURS,
+        authConfig.ttlHours,
       );
 
       await markMagicLinkAsUsed(dbConfig, magicLink.magicLinkId);
 
-      res.setHeader("Set-Cookie", buildAdminSessionCookie(session.rawToken));
+      res.setHeader("Set-Cookie", buildAdminSessionCookie(session.rawToken, authConfig));
 
       return res.redirect(
-        buildCallbackUrl(`?status=${MAGIC_LINK_CALLBACK_STATUS_OK}`),
+        buildCallbackUrl(authConfig, `?status=${MAGIC_LINK_CALLBACK_STATUS_OK}`),
       );
     } catch (err) {
       console.error("[auth-magic-link] consume failed:", err);
       return res.redirect(
-        buildCallbackUrl(`?error=${MAGIC_LINK_CALLBACK_ERROR_CONSUME_FAILED}`),
+        buildCallbackUrl(authConfig, `?error=${MAGIC_LINK_CALLBACK_ERROR_CONSUME_FAILED}`),
       );
     }
   });
