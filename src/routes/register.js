@@ -41,6 +41,8 @@ export function registerAllRoutes(app, deps) {
     playerAuthConfig,
     playerSteamAuthConfig,
     playerBunkerConfig,
+    readSeasonPlayerArtifactFn,
+    readCompetitiveProfileFn,
 
     dbConfig,
     seasonsRepo,
@@ -122,6 +124,8 @@ export function registerAllRoutes(app, deps) {
   registerPlayerBunkerSummaryRoute(app, {
     requirePlayer,
     seasonsRepo,
+    readSeasonPlayerArtifactFn,
+    readCompetitiveProfileFn,
     playerBunkerConfig,
   });
   registerContentNewsRoutes(app, { dbConfig, getDbReady });

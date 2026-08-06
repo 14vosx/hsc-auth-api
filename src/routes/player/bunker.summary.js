@@ -1,7 +1,7 @@
 // src/routes/player/bunker.summary.js
 import { buildPlayerBunkerConfig } from "../../config/playerBunker.js";
-import { readCompetitiveProfile } from "../../services/player-bunker/competitiveProfile.js";
-import { readSeasonPlayerArtifact } from "../../services/player-bunker/seasonPlayerArtifact.js";
+import { readCompetitiveProfile as readCompetitiveProfileDefault } from "../../services/player-bunker/competitiveProfile.js";
+import { readSeasonPlayerArtifact as readSeasonPlayerArtifactDefault } from "../../services/player-bunker/seasonPlayerArtifact.js";
 
 const SENSITIVE_ARTIFACT_KEY_RE = /(token|cookie|hash)/i;
 
@@ -154,7 +154,8 @@ export function registerPlayerBunkerSummaryRoute(
   {
     requirePlayer,
     seasonsRepo = null,
-    readSeasonPlayerArtifactFn = readSeasonPlayerArtifact,
+    readSeasonPlayerArtifactFn = readSeasonPlayerArtifactDefault,
+    readCompetitiveProfileFn = readCompetitiveProfileDefault,
     playerBunkerConfig = buildPlayerBunkerConfig(),
   },
 ) {
@@ -169,7 +170,7 @@ export function registerPlayerBunkerSummaryRoute(
     let data;
     const activeSeasonState = await getActiveSeasonState(seasonsRepo);
     const activeSeason = activeSeasonState.activeSeason;
-    const competitiveProfileResult = await readCompetitiveProfile({
+    const competitiveProfileResult = await readCompetitiveProfileFn({
       baseUrl: playerBunkerConfig.staticApiBaseUrl,
       timeoutMs: playerBunkerConfig.staticApiTimeoutMs,
       steamid64: player.steamid64,
