@@ -21,7 +21,24 @@ export interface AppConfig {
       };
     };
   };
-  readonly adminAuth?: unknown;
+  readonly adminAuth: {
+    readonly cookieName: string;
+    readonly ttlHours: number;
+    readonly devBootstrapEnabled: boolean;
+    readonly devAdminEmail: string;
+    readonly devAdminName: string;
+    readonly magicLinkTtlMinutes: number;
+    readonly publicUrl: string;
+    readonly backofficeUrl: string;
+    readonly magicLinkCallbackPath: string;
+    readonly magicLinkFromEmail: string;
+    readonly magicLinkSubject: string;
+    readonly smtpHost: string;
+    readonly smtpPort: number;
+    readonly smtpSecure: boolean;
+    readonly smtpUser: string;
+    readonly smtpPass: string;
+  };
   readonly playerAuth?: unknown;
   readonly playerSteamAuth?: unknown;
   readonly playerBunker?: unknown;
