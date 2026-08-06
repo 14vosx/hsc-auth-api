@@ -65,6 +65,12 @@ export interface AppConfig {
     readonly cacheTtlSeconds: number;
     readonly timeoutSeconds: number;
   };
+  readonly uploads: {
+    readonly uploadDir: string;
+    readonly publicPath: string;
+    readonly publicBaseUrl: string;
+    readonly maxBytes: number;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");

@@ -7,6 +7,7 @@ import { buildPlayerBunkerConfig } from "./playerBunker.js";
 import { buildCorsConfig } from "./cors.js";
 import { buildDbRuntimeConfig } from "./db.js";
 import { buildSteamProfilesConfig } from "./steamProfiles.js";
+import { buildUploadsConfig } from "./uploads.js";
 
 export function buildRuntimeConfig(env = process.env) {
   const port = parsePort(env.PORT, 3000, "PORT");
@@ -31,6 +32,7 @@ export function buildAppConfig(env = process.env) {
   const cors = buildCorsConfig(env);
   const db = buildDbRuntimeConfig(env);
   const steamProfiles = buildSteamProfilesConfig(env);
+  const uploads = buildUploadsConfig(env);
 
   return Object.freeze({
     runtime,
@@ -41,5 +43,6 @@ export function buildAppConfig(env = process.env) {
     cors,
     db,
     steamProfiles,
+    uploads,
   });
 }
