@@ -1,12 +1,12 @@
 // src/utils/playerSessionCookie.js
-import { AUTH_API_PUBLIC_URL } from "../config/auth.js";
-import {
-  PLAYER_SESSION_COOKIE,
-  PLAYER_SESSION_TTL_HOURS,
-} from "../config/playerAuth.js";
+import { buildAuthConfig } from "../config/auth.js";
+import { buildPlayerAuthConfig } from "../config/playerAuth.js";
 
-function appendPlayerSessionCookieSecurity(parts) {
-  const isHttps = AUTH_API_PUBLIC_URL.startsWith("https://");
+function appendPlayerSessionCookieSecurity(
+  parts,
+  publicUrl = buildAuthConfig().publicUrl,
+) {
+  const isHttps = publicUrl.startsWith("https://");
 
   if (isHttps) {
     parts.push("Secure");
@@ -18,25 +18,46 @@ function appendPlayerSessionCookieSecurity(parts) {
   return parts;
 }
 
-export function buildPlayerSessionCookie(rawToken) {
-  const maxAgeSeconds = PLAYER_SESSION_TTL_HOURS * 60 * 60;
+export function buildPlayerSessionCookie(
+  rawToken,
+  playerAuthConfig = buildPlayerAuthConfig(),
+  publicUrl = buildAuthConfig().publicUrl,
+) {
+  const cookieName =
+    playerAuthConfig.cookieName ||
+    playerAuthConfig.PLAYER_SESSION_COOKIE ||
+    "hsc_player_session";
+  const ttlHours =
+    playerAuthConfig.ttlHours ??
+    playerAuthConfig.PLAYER_SESSION_TTL_HOURS ??
+    168;
+  const maxAgeSeconds = ttlHours * 60 * 60;
+
   const parts = [
-    `${PLAYER_SESSION_COOKIE}=${encodeURIComponent(rawToken)}`,
+    `${cookieName}=${encodeURIComponent(rawToken)}`,
     "Path=/",
     "HttpOnly",
     `Max-Age=${maxAgeSeconds}`,
   ];
 
-  return appendPlayerSessionCookieSecurity(parts).join("; ");
+  return appendPlayerSessionCookieSecurity(parts, publicUrl).join("; ");
 }
 
-export function buildClearPlayerSessionCookie() {
+export function buildClearPlayerSessionCookie(
+  playerAuthConfig = buildPlayerAuthConfig(),
+  publicUrl = buildAuthConfig().publicUrl,
+) {
+  const cookieName =
+    playerAuthConfig.cookieName ||
+    playerAuthConfig.PLAYER_SESSION_COOKIE ||
+    "hsc_player_session";
+
   const parts = [
-    `${PLAYER_SESSION_COOKIE}=`,
+    `${cookieName}=`,
     "Path=/",
     "HttpOnly",
     "Max-Age=0",
   ];
 
-  return appendPlayerSessionCookieSecurity(parts).join("; ");
+  return appendPlayerSessionCookieSecurity(parts, publicUrl).join("; ");
 }

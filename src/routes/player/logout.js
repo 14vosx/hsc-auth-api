@@ -1,5 +1,6 @@
 // src/routes/player/logout.js
-import { PLAYER_SESSION_COOKIE } from "../../config/playerAuth.js";
+import { buildPlayerAuthConfig } from "../../config/playerAuth.js";
+import { buildAuthConfig } from "../../config/auth.js";
 import {
   revokePlayerSessionByToken as defaultRevokePlayerSessionByToken,
 } from "../../db/playerSessions.js";
@@ -11,6 +12,8 @@ export function registerPlayerLogoutRoute(
   {
     dbConfig,
     revokePlayerSessionByToken,
+    playerAuthConfig = buildPlayerAuthConfig(),
+    authConfig = buildAuthConfig(),
   } = {},
 ) {
   const revokeSessionByToken =
@@ -20,13 +23,17 @@ export function registerPlayerLogoutRoute(
 
   app.post("/player/auth/logout", async (req, res) => {
     const cookies = parseCookieHeader(req.headers?.cookie);
-    const rawToken = cookies[PLAYER_SESSION_COOKIE];
+    const cookieName = playerAuthConfig.cookieName || "hsc_player_session";
+    const rawToken = cookies[cookieName];
 
     if (rawToken) {
       await revokeSessionByToken(rawToken);
     }
 
-    res.setHeader("Set-Cookie", buildClearPlayerSessionCookie());
+    res.setHeader(
+      "Set-Cookie",
+      buildClearPlayerSessionCookie(playerAuthConfig, authConfig.publicUrl),
+    );
 
     return res.status(200).json({
       ok: true,

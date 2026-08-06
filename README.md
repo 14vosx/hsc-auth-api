@@ -37,8 +37,9 @@ Este repositorio nao e:
 
 ## Estrutura principal
 
-- `index.js`: ponto de entrada da API Express.
-- `src/config`: configuracao da aplicacao e leitura segura de variaveis de ambiente.
+- `index.js`: entrypoint minimalista da aplicacao que delega o bootstrap para `runBootstrap()`.
+- `src/bootstrap`: orquestrador do fluxo de inicializacao com carregamento de ambiente anterior ao import dinamico da aplicacao.
+- `src/config`: construcao e validacao centralizada de configuracao e leitura segura de variaveis de ambiente.
 - `src/db`: acesso ao banco MySQL/MariaDB via `mysql2`.
 - `src/middlewares`: middlewares compartilhados, incluindo validacoes e autorizacao quando aplicavel.
 - `src/routes`: definicao das rotas HTTP.
@@ -67,9 +68,11 @@ Copiar `.env.local.example` e apenas um ponto de partida local. Os valores de `.
 
 Pode existir apoio a Docker/MariaDB local via `docker-compose.yml`. Antes de usar Docker, inspecione o compose e confirme que os comandos apontam para ambiente local/dev. Nao execute comandos contra producao sem autorizacao explicita.
 
-## Variaveis de ambiente
+## Variaveis de ambiente e Bootstrap
 
 Nao documente valores reais de variaveis neste README. Consulte `.env.local.example` para os nomes seguros.
+
+As variaveis de ambiente sao carregadas antes do import da aplicacao e validadas centralmente no bootstrap (portas, TTLs, timeouts, URLs e booleanos). Erros de configuracao interrompem o startup com log sanitizado. A documentacao detalhada do fluxo de bootstrap e regras de validacao reside em `docs/config-bootstrap.md`.
 
 Categorias esperadas:
 
@@ -79,6 +82,7 @@ Categorias esperadas:
 - admin/internal API keys
 - Steam API
 - uploads
+- Player Bunker
 
 ## Migrations
 
@@ -139,6 +143,7 @@ Smoke scripts locais podem existir em `ops/`, como apoio a validacao local. Nao 
 
 Documentacao local neste repositorio:
 
+- `docs/config-bootstrap.md`
 - `docs/baseline-smoke.md`
 - `docs/db-migrations-policy.md`
 - `docs/admin/uploads.md`

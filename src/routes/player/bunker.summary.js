@@ -1,10 +1,5 @@
 // src/routes/player/bunker.summary.js
-import {
-  PLAYER_BUNKER_ACTIVE_SEASON_SLUG,
-  PLAYER_BUNKER_ARTIFACT_ROOT,
-  PLAYER_BUNKER_STATIC_API_BASE_URL,
-  PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
-} from "../../config/playerBunker.js";
+import { buildPlayerBunkerConfig } from "../../config/playerBunker.js";
 import { readCompetitiveProfile } from "../../services/player-bunker/competitiveProfile.js";
 import { readSeasonPlayerArtifact } from "../../services/player-bunker/seasonPlayerArtifact.js";
 
@@ -160,6 +155,7 @@ export function registerPlayerBunkerSummaryRoute(
     requirePlayer,
     seasonsRepo = null,
     readSeasonPlayerArtifactFn = readSeasonPlayerArtifact,
+    playerBunkerConfig = buildPlayerBunkerConfig(),
   },
 ) {
   app.get("/player/bunker/summary", async (req, res) => {
@@ -174,8 +170,8 @@ export function registerPlayerBunkerSummaryRoute(
     const activeSeasonState = await getActiveSeasonState(seasonsRepo);
     const activeSeason = activeSeasonState.activeSeason;
     const competitiveProfileResult = await readCompetitiveProfile({
-      baseUrl: PLAYER_BUNKER_STATIC_API_BASE_URL,
-      timeoutMs: PLAYER_BUNKER_STATIC_API_TIMEOUT_MS,
+      baseUrl: playerBunkerConfig.staticApiBaseUrl,
+      timeoutMs: playerBunkerConfig.staticApiTimeoutMs,
       steamid64: player.steamid64,
     });
 
@@ -194,8 +190,8 @@ export function registerPlayerBunkerSummaryRoute(
         activeSeason: null,
       });
     } else if (
-      PLAYER_BUNKER_ACTIVE_SEASON_SLUG &&
-      PLAYER_BUNKER_ACTIVE_SEASON_SLUG !== activeSeason.slug
+      playerBunkerConfig.activeSeasonSlug &&
+      playerBunkerConfig.activeSeasonSlug !== activeSeason.slug
     ) {
       data = buildFallbackData({
         player,
@@ -206,7 +202,7 @@ export function registerPlayerBunkerSummaryRoute(
     } else {
       try {
         const result = await readSeasonPlayerArtifactFn({
-          root: PLAYER_BUNKER_ARTIFACT_ROOT,
+          root: playerBunkerConfig.artifactRoot,
           seasonSlug: activeSeason.slug,
           steamid64: player.steamid64,
         });

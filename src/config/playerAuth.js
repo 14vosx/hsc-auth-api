@@ -1,8 +1,13 @@
 // src/config/playerAuth.js
+import { parseString, parsePositiveInt } from "./helpers.js";
 
-export const PLAYER_SESSION_COOKIE =
-  process.env.PLAYER_SESSION_COOKIE || "hsc_player_session";
-
-export const PLAYER_SESSION_TTL_HOURS = Number(
-  process.env.PLAYER_SESSION_TTL_HOURS || 168,
-);
+export function buildPlayerAuthConfig(env = process.env) {
+  return {
+    cookieName: parseString(env.PLAYER_SESSION_COOKIE, "hsc_player_session"),
+    ttlHours: parsePositiveInt(
+      env.PLAYER_SESSION_TTL_HOURS,
+      168,
+      "PLAYER_SESSION_TTL_HOURS",
+    ),
+  };
+}

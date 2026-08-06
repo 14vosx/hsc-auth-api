@@ -1,27 +1,51 @@
 // src/config/playerSteamAuth.js
-import { AUTH_API_PUBLIC_URL } from "./auth.js";
+import { parseBoolean, parseAbsoluteUrl, parseRedirectUrl } from "./helpers.js";
 
-export const PLAYER_STEAM_AUTH_ENABLED =
-  process.env.PLAYER_STEAM_AUTH_ENABLED === "true";
+export function buildPlayerSteamAuthConfig(
+  env = process.env,
+  authConfig = {},
+) {
+  const defaultPublicUrl =
+    authConfig.publicUrl || "https://auth-api.haxixesmokeclub.com";
+  const enabled = parseBoolean(
+    env.PLAYER_STEAM_AUTH_ENABLED,
+    false,
+    "PLAYER_STEAM_AUTH_ENABLED",
+  );
+  const returnUrl = parseAbsoluteUrl(
+    env.PLAYER_STEAM_RETURN_URL,
+    `${defaultPublicUrl}/player/auth/steam/callback`,
+    "PLAYER_STEAM_RETURN_URL",
+  );
+  const realm = parseAbsoluteUrl(
+    env.PLAYER_STEAM_REALM,
+    defaultPublicUrl,
+    "PLAYER_STEAM_REALM",
+  );
+  const loginUrl = "https://steamcommunity.com/openid/login";
+  const successRedirectUrl = parseRedirectUrl(
+    env.PLAYER_AUTH_SUCCESS_REDIRECT_URL,
+    "/portal/cs2-next/bunker",
+    "PLAYER_AUTH_SUCCESS_REDIRECT_URL",
+  );
+  const failureRedirectUrl = parseRedirectUrl(
+    env.PLAYER_AUTH_FAILURE_REDIRECT_URL,
+    "/portal/cs2-next/login?error=steam_auth_failed",
+    "PLAYER_AUTH_FAILURE_REDIRECT_URL",
+  );
+  const callbackRedirectEnabled = parseBoolean(
+    env.PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED,
+    false,
+    "PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED",
+  );
 
-export const PLAYER_STEAM_RETURN_URL =
-  process.env.PLAYER_STEAM_RETURN_URL ||
-  `${AUTH_API_PUBLIC_URL}/player/auth/steam/callback`;
-
-export const PLAYER_STEAM_REALM =
-  process.env.PLAYER_STEAM_REALM || AUTH_API_PUBLIC_URL;
-
-export const PLAYER_STEAM_LOGIN_URL =
-  "https://steamcommunity.com/openid/login";
-
-// Prefer relative defaults to avoid open redirects. Absolute redirect URLs are
-// accepted only from env/config, never from callback query parameters.
-export const PLAYER_AUTH_SUCCESS_REDIRECT_URL =
-  process.env.PLAYER_AUTH_SUCCESS_REDIRECT_URL || "/portal/cs2-next/bunker";
-
-export const PLAYER_AUTH_FAILURE_REDIRECT_URL =
-  process.env.PLAYER_AUTH_FAILURE_REDIRECT_URL ||
-  "/portal/cs2-next/login?error=steam_auth_failed";
-
-export const PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED =
-  process.env.PLAYER_AUTH_CALLBACK_REDIRECT_ENABLED === "true";
+  return {
+    enabled,
+    returnUrl,
+    realm,
+    loginUrl,
+    successRedirectUrl,
+    failureRedirectUrl,
+    callbackRedirectEnabled,
+  };
+}

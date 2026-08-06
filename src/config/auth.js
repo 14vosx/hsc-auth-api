@@ -1,61 +1,64 @@
 // src/config/auth.js
+import {
+  parseString,
+  parsePositiveInt,
+  parsePort,
+  parseBoolean,
+  parseAbsoluteUrl,
+  parseHttpPath,
+} from "./helpers.js";
 
-export const ADMIN_SESSION_COOKIE =
-  process.env.ADMIN_SESSION_COOKIE || "hsc_admin_session";
+export function buildAuthConfig(env = process.env, runtimeConfig = {}) {
+  const defaultPublicUrl =
+    runtimeConfig.publicUrl || "https://auth-api.haxixesmokeclub.com";
+  const publicUrl = parseAbsoluteUrl(
+    env.AUTH_API_PUBLIC_URL,
+    defaultPublicUrl,
+    "AUTH_API_PUBLIC_URL",
+  );
 
-export const ADMIN_SESSION_TTL_HOURS = Number(
-  process.env.ADMIN_SESSION_TTL_HOURS || 168,
-);
-
-export const AUTH_DEV_BOOTSTRAP_ENABLED =
-  process.env.AUTH_DEV_BOOTSTRAP_ENABLED === "true";
-
-export const AUTH_DEV_ADMIN_EMAIL =
-  process.env.AUTH_DEV_ADMIN_EMAIL || "admin@local.hsc";
-
-export const AUTH_DEV_ADMIN_NAME =
-  process.env.AUTH_DEV_ADMIN_NAME || "HSC_Local_Admin";
-
-export const MAGIC_LINK_TTL_MINUTES = Number(
-  process.env.MAGIC_LINK_TTL_MINUTES || 15,
-);
-
-export const AUTH_API_PUBLIC_URL =
-  process.env.AUTH_API_PUBLIC_URL || "https://auth-api.haxixesmokeclub.com";
-
-export const BACKOFFICE_URL =
-  process.env.BACKOFFICE_URL || "https://backoffice.haxixesmokeclub.com";
-
-export const MAGIC_LINK_CALLBACK_PATH =
-  process.env.MAGIC_LINK_CALLBACK_PATH || "/auth/callback";
-
-export const MAGIC_LINK_FROM_EMAIL =
-  process.env.MAGIC_LINK_FROM_EMAIL || "no-reply@haxixesmokeclub.com";
-
-export const MAGIC_LINK_SUBJECT =
-  process.env.MAGIC_LINK_SUBJECT || "Your HSC Backoffice sign-in link";
-
-/**
- * IMPORTANTE:
- * SMTP é lido via funções para evitar capturar process.env
- * antes do loadEnv()/dotenv em produção.
- */
-export function getSmtpHost() {
-  return process.env.SMTP_HOST || "";
-}
-
-export function getSmtpPort() {
-  return Number(process.env.SMTP_PORT || 465);
-}
-
-export function getSmtpSecure() {
-  return process.env.SMTP_SECURE === "true";
-}
-
-export function getSmtpUser() {
-  return process.env.SMTP_USER || "";
-}
-
-export function getSmtpPass() {
-  return process.env.SMTP_PASS || "";
+  return {
+    cookieName: parseString(env.ADMIN_SESSION_COOKIE, "hsc_admin_session"),
+    ttlHours: parsePositiveInt(
+      env.ADMIN_SESSION_TTL_HOURS,
+      168,
+      "ADMIN_SESSION_TTL_HOURS",
+    ),
+    devBootstrapEnabled: parseBoolean(
+      env.AUTH_DEV_BOOTSTRAP_ENABLED,
+      false,
+      "AUTH_DEV_BOOTSTRAP_ENABLED",
+    ),
+    devAdminEmail: parseString(env.AUTH_DEV_ADMIN_EMAIL, "admin@local.hsc"),
+    devAdminName: parseString(env.AUTH_DEV_ADMIN_NAME, "HSC_Local_Admin"),
+    magicLinkTtlMinutes: parsePositiveInt(
+      env.MAGIC_LINK_TTL_MINUTES,
+      15,
+      "MAGIC_LINK_TTL_MINUTES",
+    ),
+    publicUrl,
+    backofficeUrl: parseAbsoluteUrl(
+      env.BACKOFFICE_URL,
+      "https://backoffice.haxixesmokeclub.com",
+      "BACKOFFICE_URL",
+    ),
+    magicLinkCallbackPath: parseHttpPath(
+      env.MAGIC_LINK_CALLBACK_PATH,
+      "/auth/callback",
+      "MAGIC_LINK_CALLBACK_PATH",
+    ),
+    magicLinkFromEmail: parseString(
+      env.MAGIC_LINK_FROM_EMAIL,
+      "no-reply@haxixesmokeclub.com",
+    ),
+    magicLinkSubject: parseString(
+      env.MAGIC_LINK_SUBJECT,
+      "Your HSC Backoffice sign-in link",
+    ),
+    smtpHost: parseString(env.SMTP_HOST, ""),
+    smtpPort: parsePort(env.SMTP_PORT, 465, "SMTP_PORT"),
+    smtpSecure: parseBoolean(env.SMTP_SECURE, false, "SMTP_SECURE"),
+    smtpUser: parseString(env.SMTP_USER, ""),
+    smtpPass: parseString(env.SMTP_PASS, ""),
+  };
 }

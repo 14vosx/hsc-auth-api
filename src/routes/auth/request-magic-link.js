@@ -1,10 +1,7 @@
 // src/routes/auth/request-magic-link.js
 import mysql from "mysql2/promise";
 
-import {
-  AUTH_API_PUBLIC_URL,
-  MAGIC_LINK_TTL_MINUTES,
-} from "../../config/auth.js";
+import { buildAuthConfig } from "../../config/auth.js";
 import { createMagicLinkForUser } from "../../db/magicLinks.js";
 import { deliverMagicLink } from "../../services/auth/magicLinkDelivery.js";
 import { buildMagicLinkRequestOkResponse } from "../../services/auth/magicLinkContract.js";
@@ -19,8 +16,8 @@ function normalizeEmail(input) {
   return email;
 }
 
-function buildConsumeUrl(rawToken) {
-  return `${AUTH_API_PUBLIC_URL}/auth/magic-link/consume?token=${encodeURIComponent(rawToken)}`;
+function buildConsumeUrl(publicUrl, rawToken) {
+  return `${publicUrl}/auth/magic-link/consume?token=${encodeURIComponent(rawToken)}`;
 }
 
 async function findAdminUserByEmail(dbConfig, email) {
@@ -58,7 +55,10 @@ async function findAdminUserByEmail(dbConfig, email) {
   }
 }
 
-export function registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady }) {
+export function registerAuthRequestMagicLinkRoute(
+  app,
+  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+) {
   async function handler(req, res) {
     if (!getDbReady()) {
       return res.status(503).json({ ok: false, error: "db_not_ready" });
@@ -80,16 +80,19 @@ export function registerAuthRequestMagicLinkRoute(app, { dbConfig, getDbReady })
       const magicLink = await createMagicLinkForUser(
         dbConfig,
         user.id,
-        MAGIC_LINK_TTL_MINUTES,
+        authConfig.magicLinkTtlMinutes,
       );
 
-      const consumeUrl = buildConsumeUrl(magicLink.rawToken);
+      const consumeUrl = buildConsumeUrl(authConfig.publicUrl, magicLink.rawToken);
 
-      await deliverMagicLink({
-        email: user.email,
-        consumeUrl,
-        expiresAt: magicLink.expiresAt,
-      });
+      await deliverMagicLink(
+        {
+          email: user.email,
+          consumeUrl,
+          expiresAt: magicLink.expiresAt,
+        },
+        authConfig,
+      );
 
       return res.status(200).json(buildMagicLinkRequestOkResponse());
     } catch (err) {
