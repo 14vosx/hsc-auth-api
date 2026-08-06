@@ -2,8 +2,8 @@
 import cors from "cors";
 
 // IMPORTANTÍSSIMO: sem trailing slash
-function computeAllowedOrigins() {
-  const raw = (process.env.ALLOWED_ORIGINS || "").trim();
+function computeAllowedOrigins(env = process.env) {
+  const raw = (env.ALLOWED_ORIGINS || "").trim();
 
   if (raw) {
     return raw
@@ -13,12 +13,12 @@ function computeAllowedOrigins() {
       .map((s) => s.replace(/\/$/, ""));
   }
 
-  const single = (process.env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "");
+  const single = (env.ALLOWED_ORIGIN || "").trim().replace(/\/$/, "");
   return [single || "https://auth-api.haxixesmokeclub.com"];
 }
 
-export function buildCors() {
-  const allowedOrigins = computeAllowedOrigins();
+export function buildCors(env = process.env) {
+  const allowedOrigins = computeAllowedOrigins(env);
   const allowedOriginsSet = new Set(allowedOrigins);
 
   const corsOptions = {

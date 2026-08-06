@@ -21,16 +21,16 @@ function parseMaxBytes(value) {
   return Math.floor(parsed);
 }
 
-export function buildUploadsConfig() {
-  const publicPath = cleanPublicPath(process.env.UPLOAD_PUBLIC_PATH);
+export function buildUploadsConfig(env = process.env) {
+  const publicPath = cleanPublicPath(env.UPLOAD_PUBLIC_PATH);
   const publicBaseUrl = cleanBaseUrl(
-    process.env.UPLOAD_PUBLIC_BASE_URL || process.env.AUTH_API_PUBLIC_URL,
+    env.UPLOAD_PUBLIC_BASE_URL || env.AUTH_API_PUBLIC_URL,
   );
 
   return {
-    uploadDir: path.resolve(process.env.UPLOAD_DIR || DEFAULT_UPLOAD_DIR),
+    uploadDir: path.resolve(env.UPLOAD_DIR || DEFAULT_UPLOAD_DIR),
     publicPath,
     publicBaseUrl,
-    maxBytes: parseMaxBytes(process.env.UPLOAD_MAX_BYTES),
+    maxBytes: parseMaxBytes(env.UPLOAD_MAX_BYTES),
   };
 }
