@@ -57,6 +57,7 @@ export function registerAllRoutes(app, deps) {
     deliverMagicLink,
 
     findUsableMagicLinkByToken,
+    ensureLocalAdminUser,
     createSessionForUser,
     markMagicLinkAsUsed,
 
@@ -74,7 +75,13 @@ export function registerAllRoutes(app, deps) {
 
   registerHealthRoutes(app, { corsMeta, getDbStatus });
   registerAuthSessionRoute(app, { resolveSessionAdmin });
-  registerDevBootstrapSessionRoute(app, { dbConfig, getDbReady, authConfig });
+  registerDevBootstrapSessionRoute(app, {
+    dbConfig,
+    getDbReady,
+    authConfig,
+    ensureLocalAdminUser,
+    createSessionForUser,
+  });
   registerAuthRequestMagicLinkRoute(app, {
     dbConfig,
     getDbReady,
