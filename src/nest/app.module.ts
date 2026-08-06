@@ -13,6 +13,7 @@ import { AdminUsersModule } from "./admin/users/admin-users.module.js";
 import { AdminNewsModule } from "./admin/news/admin-news.module.js";
 import { InternalSteamProfilesModule } from "./internal/steam/internal-steam-profiles.module.js";
 import { AdminUploadsModule } from "./admin/uploads/admin-uploads.module.js";
+import { AdminSeasonsModule } from "./admin/seasons/admin-seasons.module.js";
 
 @Module({})
 export class AppModule {
@@ -33,6 +34,7 @@ export class AppModule {
         AdminNewsModule,
         InternalSteamProfilesModule,
         AdminUploadsModule,
+        AdminSeasonsModule,
       ],
     };
   }
