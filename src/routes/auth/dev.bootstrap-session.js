@@ -1,10 +1,12 @@
 import mysql from "mysql2/promise";
 
 import { buildAuthConfig } from "../../config/auth.js";
-import { createSessionForUser } from "../../db/adminSessions.js";
+import {
+  createSessionForUser as createSessionForUserDefault,
+} from "../../db/adminSessions.js";
 import { buildAdminSessionCookie } from "../../utils/sessionCookie.js";
 
-async function ensureLocalAdminUser(dbConfig, authConfig) {
+async function ensureLocalAdminUserDefault(dbConfig, authConfig) {
   const connection = await mysql.createConnection(dbConfig);
   const email = authConfig.devAdminEmail;
   const name = authConfig.devAdminName;
@@ -63,7 +65,13 @@ async function ensureLocalAdminUser(dbConfig, authConfig) {
 
 export function registerDevBootstrapSessionRoute(
   app,
-  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+  {
+    dbConfig,
+    getDbReady,
+    authConfig = buildAuthConfig(),
+    ensureLocalAdminUser = ensureLocalAdminUserDefault,
+    createSessionForUser = createSessionForUserDefault,
+  },
 ) {
   app.post("/auth/dev/bootstrap-session", async (_req, res) => {
     if (!authConfig.devBootstrapEnabled) {
@@ -95,10 +103,11 @@ export function registerDevBootstrapSessionRoute(
         role: user.role,
       });
     } catch (err) {
+      console.error("[auth-dev-bootstrap] failed:", err);
+
       return res.status(500).json({
         ok: false,
         error: "dev_bootstrap_failed",
-        message: err.message,
       });
     }
   });
