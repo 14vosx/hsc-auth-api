@@ -2,12 +2,16 @@
 import { buildPlayerSteamAuthConfig } from "../../config/playerSteamAuth.js";
 import { buildPlayerAuthConfig } from "../../config/playerAuth.js";
 import { buildAuthConfig } from "../../config/auth.js";
-import { resolveOrCreatePlayerAccountFromSteamId } from "../../db/playerAccounts.js";
-import { createPlayerSessionForAccount } from "../../db/playerSessions.js";
+import {
+  resolveOrCreatePlayerAccountFromSteamId as resolveOrCreatePlayerAccountFromSteamIdDefault,
+} from "../../db/playerAccounts.js";
+import {
+  createPlayerSessionForAccount as createPlayerSessionForAccountDefault,
+} from "../../db/playerSessions.js";
 import {
   buildSteamAuthUnavailablePayload,
   buildSteamOpenIdStartUrl,
-  verifySteamOpenIdCallback,
+  verifySteamOpenIdCallback as verifySteamOpenIdCallbackDefault,
 } from "../../services/player-auth/steamAuth.js";
 import { buildPlayerSessionCookie } from "../../utils/playerSessionCookie.js";
 
@@ -19,6 +23,10 @@ export function registerPlayerSteamAuthRoutes(
     playerSteamAuthConfig = buildPlayerSteamAuthConfig(),
     playerAuthConfig = buildPlayerAuthConfig(),
     authConfig = buildAuthConfig(),
+    verifySteamOpenIdCallback = verifySteamOpenIdCallbackDefault,
+    resolveOrCreatePlayerAccountFromSteamId =
+      resolveOrCreatePlayerAccountFromSteamIdDefault,
+    createPlayerSessionForAccount = createPlayerSessionForAccountDefault,
   },
 ) {
   function shouldRedirectAfterPlayerAuth() {

@@ -60,6 +60,10 @@ export function registerAllRoutes(app, deps) {
     ensureLocalAdminUser,
     createSessionForUser,
     markMagicLinkAsUsed,
+    revokePlayerSessionByToken,
+    verifySteamOpenIdCallback,
+    resolveOrCreatePlayerAccountFromSteamId,
+    createPlayerSessionForAccount,
 
     // utils/helpers
     sendPublic,
@@ -104,8 +108,16 @@ export function registerAllRoutes(app, deps) {
     playerSteamAuthConfig,
     playerAuthConfig,
     authConfig,
+    verifySteamOpenIdCallback,
+    resolveOrCreatePlayerAccountFromSteamId,
+    createPlayerSessionForAccount,
   });
-  registerPlayerLogoutRoute(app, { dbConfig, playerAuthConfig, authConfig });
+  registerPlayerLogoutRoute(app, {
+    dbConfig,
+    revokePlayerSessionByToken,
+    playerAuthConfig,
+    authConfig,
+  });
   registerPlayerMeRoute(app, { requirePlayer });
   registerPlayerBunkerSummaryRoute(app, {
     requirePlayer,
