@@ -10,6 +10,7 @@ import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
 import { PlayerAuthModule } from "./player/auth/player-auth.module.js";
 import { PlayerBunkerModule } from "./player/bunker/player-bunker.module.js";
 import { AdminUsersModule } from "./admin/users/admin-users.module.js";
+import { AdminNewsModule } from "./admin/news/admin-news.module.js";
 
 @Module({})
 export class AppModule {
@@ -27,6 +28,7 @@ export class AppModule {
         PlayerAuthModule,
         PlayerBunkerModule,
         AdminUsersModule,
+        AdminNewsModule,
       ],
     };
   }
