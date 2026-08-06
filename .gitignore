@@ -19,3 +19,5 @@ index.js.bak.*
 # Local uploaded files
 var/uploads/
 var/uploads/*
+
+/dist/
