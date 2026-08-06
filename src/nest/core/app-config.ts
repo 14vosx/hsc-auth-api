@@ -59,6 +59,12 @@ export interface AppConfig {
     readonly staticApiBaseUrl: string;
     readonly staticApiTimeoutMs: number;
   };
+  readonly steamProfiles: {
+    readonly internalApiKey: string;
+    readonly steamApiKey: string;
+    readonly cacheTtlSeconds: number;
+    readonly timeoutSeconds: number;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
