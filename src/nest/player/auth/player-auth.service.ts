@@ -6,7 +6,7 @@ import { parseCookieHeader } from "../../core/http/parse-cookie-header.js";
 export interface PlayerIdentity {
   via: "session";
   sessionId: string | null;
-  playerAccountId: number | null;
+  playerAccountId: string | null;
   steamid64: string | null;
   displayName: string | null;
   avatarMedium: string | null;

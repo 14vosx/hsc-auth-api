@@ -5,7 +5,7 @@ import { DatabaseService } from "../../database/database.service.js";
 
 export interface PlayerSession {
   sessionId: string;
-  playerAccountId: number;
+  playerAccountId: string;
   steamid64: string | null;
   displayName: string | null;
   avatarMedium: string | null;
@@ -20,7 +20,7 @@ export interface CreatedPlayerSession {
 
 interface RawPlayerSessionRow extends RowDataPacket {
   session_id: string;
-  player_account_id: number;
+  player_account_id: string;
   expires_at: Date | string;
   display_name: string | null;
   steamid64: string | null;
@@ -87,7 +87,7 @@ export class PlayerSessionRepository {
   }
 
   async createPlayerSessionForAccount(
-    playerAccountId: number,
+    playerAccountId: string,
     ttlHours: number,
   ): Promise<CreatedPlayerSession> {
     const rawToken = randomUUID();
