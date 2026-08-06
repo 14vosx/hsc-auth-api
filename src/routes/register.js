@@ -60,6 +60,7 @@ export function registerAllRoutes(app, deps) {
     ensureLocalAdminUser,
     createSessionForUser,
     markMagicLinkAsUsed,
+    revokePlayerSessionByToken,
 
     // utils/helpers
     sendPublic,
@@ -105,7 +106,12 @@ export function registerAllRoutes(app, deps) {
     playerAuthConfig,
     authConfig,
   });
-  registerPlayerLogoutRoute(app, { dbConfig, playerAuthConfig, authConfig });
+  registerPlayerLogoutRoute(app, {
+    dbConfig,
+    revokePlayerSessionByToken,
+    playerAuthConfig,
+    authConfig,
+  });
   registerPlayerMeRoute(app, { requirePlayer });
   registerPlayerBunkerSummaryRoute(app, {
     requirePlayer,
