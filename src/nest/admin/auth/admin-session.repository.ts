@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { createHash } from "node:crypto";
-import type { RowDataPacket } from "mysql2";
+import { createHash, randomUUID } from "node:crypto";
+import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { DatabaseService } from "../../database/database.service.js";
 
 export interface AdminSession {
@@ -10,6 +10,11 @@ export interface AdminSession {
   email: string | null;
   name: string | null;
   role: string | null;
+}
+
+export interface CreatedAdminSession {
+  sessionId: string;
+  rawToken: string;
 }
 
 interface RawSessionRow extends RowDataPacket {
@@ -69,6 +74,41 @@ export class AdminSessionRepository {
       email: row.email,
       name: row.display_name,
       role: row.role,
+    };
+  }
+
+  async createSessionForUser(
+    userId: number,
+    ttlHours: number,
+  ): Promise<CreatedAdminSession> {
+    const rawToken = randomUUID();
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const sessionId = randomUUID();
+    const pool = this.databaseService.getPool();
+
+    await pool.execute<ResultSetHeader>(
+      `
+        INSERT INTO sessions (
+          id,
+          user_id,
+          token_hash,
+          expires_at,
+          revoked_at
+        )
+        VALUES (
+          ?,
+          ?,
+          ?,
+          DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR),
+          NULL
+        )
+      `,
+      [sessionId, userId, tokenHash, ttlHours],
+    );
+
+    return {
+      sessionId,
+      rawToken,
     };
   }
 }
