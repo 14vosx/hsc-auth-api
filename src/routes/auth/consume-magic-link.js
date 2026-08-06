@@ -1,9 +1,11 @@
 // src/routes/auth/consume-magic-link.js
 import { buildAuthConfig } from "../../config/auth.js";
-import { createSessionForUser } from "../../db/adminSessions.js";
 import {
-  findUsableMagicLinkByToken,
-  markMagicLinkAsUsed,
+  createSessionForUser as createSessionForUserDefault,
+} from "../../db/adminSessions.js";
+import {
+  findUsableMagicLinkByToken as findUsableMagicLinkByTokenDefault,
+  markMagicLinkAsUsed as markMagicLinkAsUsedDefault,
 } from "../../db/magicLinks.js";
 import { buildAdminSessionCookie } from "../../utils/sessionCookie.js";
 import {
@@ -21,7 +23,14 @@ function buildCallbackUrl(authConfig, query = "") {
 
 export function registerAuthConsumeMagicLinkRoute(
   app,
-  { dbConfig, getDbReady, authConfig = buildAuthConfig() },
+  {
+    dbConfig,
+    getDbReady,
+    authConfig = buildAuthConfig(),
+    findUsableMagicLinkByToken = findUsableMagicLinkByTokenDefault,
+    createSessionForUser = createSessionForUserDefault,
+    markMagicLinkAsUsed = markMagicLinkAsUsedDefault,
+  },
 ) {
   app.get("/auth/magic-link/consume", async (req, res) => {
     if (!getDbReady()) {

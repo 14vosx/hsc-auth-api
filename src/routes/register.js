@@ -56,6 +56,10 @@ export function registerAllRoutes(app, deps) {
     createMagicLinkForUser,
     deliverMagicLink,
 
+    findUsableMagicLinkByToken,
+    createSessionForUser,
+    markMagicLinkAsUsed,
+
     // utils/helpers
     sendPublic,
     sendBadRequest,
@@ -79,7 +83,14 @@ export function registerAllRoutes(app, deps) {
     createMagicLinkForUser,
     deliverMagicLink,
   });
-  registerAuthConsumeMagicLinkRoute(app, { dbConfig, getDbReady, authConfig });
+  registerAuthConsumeMagicLinkRoute(app, {
+    dbConfig,
+    getDbReady,
+    authConfig,
+    findUsableMagicLinkByToken,
+    createSessionForUser,
+    markMagicLinkAsUsed,
+  });
   registerPlayerSteamAuthRoutes(app, {
     getDbReady,
     dbConfig,
