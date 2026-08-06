@@ -61,6 +61,9 @@ export function registerAllRoutes(app, deps) {
     createSessionForUser,
     markMagicLinkAsUsed,
     revokePlayerSessionByToken,
+    verifySteamOpenIdCallback,
+    resolveOrCreatePlayerAccountFromSteamId,
+    createPlayerSessionForAccount,
 
     // utils/helpers
     sendPublic,
@@ -105,6 +108,9 @@ export function registerAllRoutes(app, deps) {
     playerSteamAuthConfig,
     playerAuthConfig,
     authConfig,
+    verifySteamOpenIdCallback,
+    resolveOrCreatePlayerAccountFromSteamId,
+    createPlayerSessionForAccount,
   });
   registerPlayerLogoutRoute(app, {
     dbConfig,
