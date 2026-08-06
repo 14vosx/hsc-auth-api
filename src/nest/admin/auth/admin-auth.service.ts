@@ -1,7 +1,7 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { AppConfig, APP_CONFIG } from "../../core/app-config.js";
 import { AdminSessionRepository } from "./admin-session.repository.js";
-import { parseCookieHeader } from "./parse-cookie-header.js";
+import { parseCookieHeader } from "../../core/http/parse-cookie-header.js";
 
 export interface AdminIdentity {
   via: "session" | "admin-key";

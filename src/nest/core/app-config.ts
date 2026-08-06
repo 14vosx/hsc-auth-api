@@ -40,7 +40,10 @@ export interface AppConfig {
     readonly smtpUser: string;
     readonly smtpPass: string;
   };
-  readonly playerAuth?: unknown;
+  readonly playerAuth: {
+    readonly cookieName: string;
+    readonly ttlHours: number;
+  };
   readonly playerSteamAuth?: unknown;
   readonly playerBunker?: unknown;
 }

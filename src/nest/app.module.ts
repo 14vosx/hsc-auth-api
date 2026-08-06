@@ -7,6 +7,7 @@ import { ContentNewsModule } from "./content/news/content-news.module.js";
 import { ContentSeasonsModule } from "./content/seasons/content-seasons.module.js";
 import { AdminAuthModule } from "./admin/auth/admin-auth.module.js";
 import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
+import { PlayerAuthModule } from "./player/auth/player-auth.module.js";
 
 @Module({})
 export class AppModule {
@@ -21,6 +22,7 @@ export class AppModule {
         ContentSeasonsModule,
         AdminAuthModule,
         AdminSchemaModule,
+        PlayerAuthModule,
       ],
     };
   }
