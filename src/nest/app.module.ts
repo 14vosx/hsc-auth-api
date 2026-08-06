@@ -8,6 +8,7 @@ import { ContentSeasonsModule } from "./content/seasons/content-seasons.module.j
 import { AdminAuthModule } from "./admin/auth/admin-auth.module.js";
 import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
 import { PlayerAuthModule } from "./player/auth/player-auth.module.js";
+import { PlayerBunkerModule } from "./player/bunker/player-bunker.module.js";
 
 @Module({})
 export class AppModule {
@@ -23,6 +24,7 @@ export class AppModule {
         AdminAuthModule,
         AdminSchemaModule,
         PlayerAuthModule,
+        PlayerBunkerModule,
       ],
     };
   }

@@ -5,5 +5,6 @@ import { ContentSeasonsRepository } from "./content-seasons.repository.js";
 @Module({
   controllers: [ContentSeasonsController],
   providers: [ContentSeasonsRepository],
+  exports: [ContentSeasonsRepository],
 })
 export class ContentSeasonsModule {}

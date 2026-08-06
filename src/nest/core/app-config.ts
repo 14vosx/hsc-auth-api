@@ -53,7 +53,12 @@ export interface AppConfig {
     readonly failureRedirectUrl: string;
     readonly callbackRedirectEnabled: boolean;
   };
-  readonly playerBunker?: unknown;
+  readonly playerBunker: {
+    readonly artifactRoot: string;
+    readonly activeSeasonSlug: string;
+    readonly staticApiBaseUrl: string;
+    readonly staticApiTimeoutMs: number;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
