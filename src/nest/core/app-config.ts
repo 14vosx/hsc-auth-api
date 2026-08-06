@@ -44,7 +44,15 @@ export interface AppConfig {
     readonly cookieName: string;
     readonly ttlHours: number;
   };
-  readonly playerSteamAuth?: unknown;
+  readonly playerSteamAuth: {
+    readonly enabled: boolean;
+    readonly returnUrl: string;
+    readonly realm: string;
+    readonly loginUrl: string;
+    readonly successRedirectUrl: string;
+    readonly failureRedirectUrl: string;
+    readonly callbackRedirectEnabled: boolean;
+  };
   readonly playerBunker?: unknown;
 }
 
