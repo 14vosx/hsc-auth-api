@@ -4,6 +4,7 @@ import { CoreConfigModule } from "./core/core-config.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { ContentNewsModule } from "./content/news/content-news.module.js";
+import { ContentSeasonsModule } from "./content/seasons/content-seasons.module.js";
 
 @Module({})
 export class AppModule {
@@ -15,6 +16,7 @@ export class AppModule {
         DatabaseModule,
         HealthModule,
         ContentNewsModule,
+        ContentSeasonsModule,
       ],
     };
   }
