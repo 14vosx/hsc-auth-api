@@ -9,6 +9,7 @@ import { AdminAuthModule } from "./admin/auth/admin-auth.module.js";
 import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
 import { PlayerAuthModule } from "./player/auth/player-auth.module.js";
 import { PlayerBunkerModule } from "./player/bunker/player-bunker.module.js";
+import { PlayerProfileModule } from "./player/profile/player-profile.module.js";
 import { AdminUsersModule } from "./admin/users/admin-users.module.js";
 import { AdminNewsModule } from "./admin/news/admin-news.module.js";
 import { InternalSteamProfilesModule } from "./internal/steam/internal-steam-profiles.module.js";
@@ -30,6 +31,7 @@ export class AppModule {
         AdminSchemaModule,
         PlayerAuthModule,
         PlayerBunkerModule,
+        PlayerProfileModule,
         AdminUsersModule,
         AdminNewsModule,
         InternalSteamProfilesModule,
