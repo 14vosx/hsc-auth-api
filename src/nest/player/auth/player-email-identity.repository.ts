@@ -6,6 +6,9 @@ import {
 } from "node:crypto";
 import type { RowDataPacket } from "mysql2";
 import { DatabaseService } from "../../database/database.service.js";
+import {
+  buildInitialPlayerProfileValues,
+} from "../profile/player-profile.defaults.js";
 
 export interface CreatedPendingEmailRegistration {
   created: true;
@@ -67,8 +70,15 @@ export class PlayerEmailIdentityRepository {
 
       try {
         const playerAccountId = randomUUID();
+        const playerProfileId = randomUUID();
         const playerEmailIdentityId = randomUUID();
         const verificationTokenId = randomUUID();
+
+        const initialProfile =
+          buildInitialPlayerProfileValues(
+            playerAccountId,
+            input.displayName,
+          );
 
         const rawVerificationToken = randomBytes(32).toString("hex");
         const tokenHash = createHash("sha256")
@@ -95,6 +105,33 @@ export class PlayerEmailIdentityRepository {
             )
           `,
           [playerAccountId, input.displayName],
+        );
+
+        await connection.execute(
+          `
+            INSERT INTO player_profiles (
+              id,
+              player_account_id,
+              display_name,
+              slug,
+              visibility,
+              joined_at
+            )
+            VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              'private',
+              UTC_TIMESTAMP()
+            )
+          `,
+          [
+            playerProfileId,
+            playerAccountId,
+            initialProfile.displayName,
+            initialProfile.slug,
+          ],
         );
 
         await connection.execute(

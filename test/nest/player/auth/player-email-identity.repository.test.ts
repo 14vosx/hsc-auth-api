@@ -74,7 +74,7 @@ test("PlayerEmailIdentityRepository - cria conta, identidade e token na mesma tr
     "release",
   ]);
 
-  assert.equal(executed.length, 3);
+  assert.equal(executed.length, 4);
 
   assert.match(
     executed[0].sql,
@@ -83,15 +83,35 @@ test("PlayerEmailIdentityRepository - cria conta, identidade e token na mesma tr
 
   assert.match(
     executed[1].sql,
-    /INSERT INTO player_email_identities/,
+    /INSERT INTO player_profiles/,
   );
 
   assert.match(
     executed[2].sql,
+    /INSERT INTO player_email_identities/,
+  );
+
+  assert.match(
+    executed[3].sql,
     /INSERT INTO player_email_verification_tokens/,
   );
 
-  const tokenInsert = executed[2].params;
+  assert.equal(
+    executed[1].params[1],
+    result.playerAccountId,
+  );
+
+  assert.equal(
+    executed[1].params[2],
+    "Player",
+  );
+
+  assert.equal(
+    executed[1].params[3],
+    `player-${result.playerAccountId.replaceAll("-", "")}`,
+  );
+
+  const tokenInsert = executed[3].params;
   const persistedHash = tokenInsert[2];
 
   assert.equal(typeof persistedHash, "string");
@@ -135,10 +155,16 @@ test("PlayerEmailIdentityRepository - conflito UNIQUE de email faz rollback e re
       }
 
       if (executeCount === 2) {
-        throw duplicateError;
+        return [{
+          affectedRows: 1,
+        }];
       }
 
       if (executeCount === 3) {
+        throw duplicateError;
+      }
+
+      if (executeCount === 4) {
         return [[{
           id: "existing-identity",
         }]];
@@ -190,7 +216,7 @@ test("PlayerEmailIdentityRepository - conflito UNIQUE de email faz rollback e re
     "release",
   ]);
 
-  assert.equal(executeCount, 3);
+  assert.equal(executeCount, 4);
 });
 
 test("PlayerEmailIdentityRepository - ER_DUP_ENTRY não relacionado ao email continua sendo erro", async () => {
@@ -304,4 +330,110 @@ test("PlayerEmailIdentityRepository - falha de escrita faz rollback", async () =
     "rollback",
     "release",
   ]);
+});
+
+test("PlayerEmailIdentityRepository - falha ao criar perfil reverte conta e não cria identidade", async () => {
+  const calls: string[] = [];
+  const statements: string[] = [];
+  let executeCount = 0;
+
+  const connection = {
+    async beginTransaction() {
+      calls.push("begin");
+    },
+
+    async execute(
+      sql: string,
+    ) {
+      executeCount += 1;
+
+      const normalized =
+        sql.replace(/\s+/g, " ").trim();
+
+      statements.push(normalized);
+
+      if (executeCount === 1) {
+        return [{
+          affectedRows: 1,
+        }];
+      }
+
+      if (executeCount === 2) {
+        throw new Error(
+          "profile_write_failed",
+        );
+      }
+
+      throw new Error(
+        "unexpected_execute",
+      );
+    },
+
+    async commit() {
+      calls.push("commit");
+    },
+
+    async rollback() {
+      calls.push("rollback");
+    },
+
+    release() {
+      calls.push("release");
+    },
+  };
+
+  const databaseService = {
+    getPool() {
+      return {
+        async getConnection() {
+          return connection;
+        },
+      };
+    },
+  } as unknown as DatabaseService;
+
+  const repository =
+    new PlayerEmailIdentityRepository(
+      databaseService,
+    );
+
+  await assert.rejects(
+    repository.createPendingRegistration({
+      email: "player@example.com",
+      passwordHash: "scrypt$v1$fake",
+      displayName: "Player",
+      verificationTtlMinutes: 30,
+    }),
+    /profile_write_failed/,
+  );
+
+  assert.deepEqual(calls, [
+    "begin",
+    "rollback",
+    "release",
+  ]);
+
+  assert.equal(
+    executeCount,
+    2,
+  );
+
+  assert.match(
+    statements[0],
+    /INSERT INTO player_accounts/,
+  );
+
+  assert.match(
+    statements[1],
+    /INSERT INTO player_profiles/,
+  );
+
+  assert.equal(
+    statements.some((statement) =>
+      statement.includes(
+        "INSERT INTO player_email_identities",
+      ),
+    ),
+    false,
+  );
 });

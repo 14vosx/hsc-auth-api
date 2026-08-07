@@ -2,6 +2,9 @@ import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2";
 import { DatabaseService } from "../../database/database.service.js";
+import {
+  buildInitialPlayerProfileValues,
+} from "../profile/player-profile.defaults.js";
 
 const STEAMID64_RE = /^\d{17}$/;
 
@@ -99,7 +102,14 @@ export class PlayerAccountRepository {
         }
 
         const playerAccountId = randomUUID();
+        const playerProfileId = randomUUID();
         const playerSteamIdentityId = randomUUID();
+
+        const initialProfile =
+          buildInitialPlayerProfileValues(
+            playerAccountId,
+            null,
+          );
 
         await connection.execute(
           `
@@ -115,6 +125,33 @@ export class PlayerAccountRepository {
             )
           `,
           [playerAccountId],
+        );
+
+        await connection.execute(
+          `
+            INSERT INTO player_profiles (
+              id,
+              player_account_id,
+              display_name,
+              slug,
+              visibility,
+              joined_at
+            )
+            VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              'private',
+              UTC_TIMESTAMP()
+            )
+          `,
+          [
+            playerProfileId,
+            playerAccountId,
+            initialProfile.displayName,
+            initialProfile.slug,
+          ],
         );
 
         await connection.execute(
