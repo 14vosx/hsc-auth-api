@@ -1,168 +1,482 @@
-# hsc-auth-api
+# HSC Auth API
 
-API de autenticacao e conteudo do HSC, responsavel por Auth, sessoes administrativas, RBAC/admin access, APIs administrativas, conteudo publico, News, Seasons, uploads e cache de perfis Steam.
+API de autenticação, identidade, conteúdo e acesso autenticado do ecossistema HSC.
+
+A aplicação utiliza NestJS 11 com TypeScript em modo estrito, organizada como monólito modular e executada em um único processo Node.js com um único listener HTTP.
+
+## Responsabilidades
+
+O `hsc-auth-api` é responsável por:
+
+- autenticação administrativa por Magic Link;
+- sessões administrativas por cookie;
+- autorização administrativa;
+- autenticação de jogadores via Steam OpenID;
+- sessões de jogadores por cookie;
+- resolução da identidade Steam;
+- gateway autenticado do Player Bunker;
+- APIs administrativas de usuários, notícias e Seasons;
+- APIs públicas de notícias e Seasons;
+- uploads administrativos protegidos;
+- publicação controlada de arquivos estáticos;
+- cache de perfis Steam;
+- health e readiness do banco de dados;
+- acesso a MariaDB/MySQL;
+- execução de migrations SQL por CLI separada.
 
 ## Papel no ecossistema HSC
 
-Este repositorio fornece autenticacao e sessao administrativa para servicos do HSC. Ele expoe APIs administrativas usadas pelo `hsc-backoffice-admin` e, quando aplicavel, contratos publicos de conteudo consumidos pelo Portal/ETL.
+Este repositório fornece serviços para outros componentes do HSC:
 
-O `hsc-auth-api` tambem e o dono canonico de alguns dados de conteudo, como News, Seasons e Steam Profiles.
+- `hsc-backoffice-admin` consome as APIs administrativas;
+- `hsc-cs2-portal` consome autenticação de jogador, Player Bunker e conteúdo público;
+- `hsc-cs2-etl` pode consumir contratos públicos ou internos relacionados a Seasons e perfis Steam;
+- a Static API competitiva continua sendo materializada pelo ETL;
+- a apresentação player-facing pertence ao Portal.
 
-Este repositorio nao e:
+Este repositório não é:
 
 - o Portal Angular;
+- o Backoffice Angular;
 - o ETL da Static API;
-- o Backoffice UI.
+- o servidor CS2;
+- o MatchZy;
+- o Brand Hub;
+- a configuração de Nginx, systemd, DNS ou TLS.
 
-## Escopo
+## Arquitetura
 
-- Magic link authentication
-- Cookie-based admin session
-- Admin users
-- Admin/content News APIs
-- Seasons admin/public APIs
-- Uploads protegidos
-- Steam Profiles cache
-- Health/readiness
-- SQL migrations
+Stack principal:
 
-## Fora de escopo
+```text
+Node.js 22
+NestJS 11
+TypeScript strict
+ES Modules
+@nestjs/platform-express
+MariaDB / MySQL
+mysql2
+SQL migrations
+Cookie-based sessions
+Steam OpenID
+```
 
-- UI administrativa
-- Portal player-facing
-- geracao da Static API v2
-- deploy do portal estatico
-- administracao de Nginx/systemd/DNS/TLS
-- dados locais do jogo/MatchZy
+Princípios estruturais:
+
+* monólito modular;
+* um único processo de aplicação;
+* um único listener HTTP;
+* um único pipeline HTTP;
+* configuração centralizada e validada;
+* injeção de dependências por módulos NestJS;
+* controllers responsáveis pelo transporte HTTP;
+* services responsáveis por regras de aplicação;
+* repositories responsáveis pela persistência;
+* SQL nativo por meio de `mysql2`;
+* migrations executadas fora do startup HTTP;
+* nenhum ORM.
+
+O Express é utilizado apenas como adaptador HTTP interno de `@nestjs/platform-express`.
+
+## Módulos da aplicação
+
+A aplicação está dividida nos seguintes módulos principais:
+
+```text
+CoreConfigModule
+DatabaseModule
+HealthModule
+
+ContentNewsModule
+ContentSeasonsModule
+
+AdminAuthModule
+AdminSchemaModule
+AdminUsersModule
+AdminNewsModule
+AdminUploadsModule
+AdminSeasonsModule
+
+PlayerAuthModule
+PlayerBunkerModule
+
+InternalSteamProfilesModule
+```
+
+### Core e banco de dados
+
+* `CoreConfigModule`: disponibiliza a configuração validada para os demais módulos;
+* `DatabaseModule`: gerencia a pool `mysql2` e o ciclo de vida da conexão;
+* `HealthModule`: expõe health e readiness da aplicação e do banco.
+
+### Conteúdo público
+
+* `ContentNewsModule`: leitura pública de notícias;
+* `ContentSeasonsModule`: leitura pública de Seasons.
+
+### Administração
+
+* `AdminAuthModule`: sessão administrativa, Magic Link e bootstrap administrativo local;
+* `AdminSchemaModule`: consulta administrativa de versão e tabelas do schema;
+* `AdminUsersModule`: gerenciamento administrativo de usuários;
+* `AdminNewsModule`: gerenciamento administrativo de notícias;
+* `AdminUploadsModule`: upload protegido e publicação controlada de arquivos;
+* `AdminSeasonsModule`: gerenciamento do ciclo de vida das Seasons.
+
+### Jogadores
+
+* `PlayerAuthModule`: autenticação Steam, sessão, identidade e logout;
+* `PlayerBunkerModule`: gateway autenticado e defensivo para dados competitivos materializados pelo ETL.
+
+### Serviços internos
+
+* `InternalSteamProfilesModule`: resolução e cache de perfis Steam para integrações autorizadas.
 
 ## Estrutura principal
 
-- `index.js`: entrypoint minimalista da aplicacao que delega o bootstrap para `runBootstrap()`.
-- `src/bootstrap`: orquestrador do fluxo de inicializacao com carregamento de ambiente anterior ao import dinamico da aplicacao.
-- `src/config`: construcao e validacao centralizada de configuracao e leitura segura de variaveis de ambiente.
-- `src/db`: acesso ao banco MySQL/MariaDB via `mysql2`.
-- `src/middlewares`: middlewares compartilhados, incluindo validacoes e autorizacao quando aplicavel.
-- `src/routes`: definicao das rotas HTTP.
-- `src/services`: regras de negocio e integracoes internas.
-- `src/utils`: utilitarios compartilhados.
-- `scripts/migrate.js`: executor local das migrations SQL.
-- `docs/`: documentacao local do repositorio.
-- `docker-compose.yml`: apoio opcional para ambiente local; inspecione antes de usar.
-- `.env.local.example`: referencia segura de nomes de variaveis de ambiente.
-- `AGENTS.md`: regras operacionais, de seguranca e de validacao para trabalho neste repositorio.
+```text
+index.js
+src/
+  bootstrap/
+  config/
+  nest/
+    admin/
+    content/
+    core/
+    database/
+    health/
+    internal/
+    player/
+    app.module.ts
+    startApplication.ts
+db/
+  migrations/
+scripts/
+ops/
+docs/
+test/
+```
+
+Arquivos e diretórios relevantes:
+
+* `index.js`: entrypoint minimalista;
+* `src/bootstrap/runBootstrap.js`: carrega ambiente, valida configuração e inicia a aplicação compilada;
+* `src/config/`: carregamento e validação centralizada da configuração;
+* `src/nest/app.module.ts`: composition root modular do NestJS;
+* `src/nest/startApplication.ts`: criação e inicialização da aplicação HTTP;
+* `src/nest/database/`: infraestrutura de acesso ao MariaDB/MySQL;
+* `db/migrations/`: migrations SQL numeradas;
+* `scripts/migrate.js`: entrypoint CLI das migrations;
+* `scripts/migrationRunner.js`: runner de migrations;
+* `ops/`: scripts operacionais;
+* `docs/`: documentação técnica e decisões arquiteturais;
+* `.env.local.example`: referência segura de variáveis locais;
+* `AGENTS.md`: regras operacionais para trabalho no repositório.
+
+## Bootstrap
+
+O fluxo de inicialização é:
+
+```text
+index.js
+  └── runBootstrap()
+        ├── carrega ENV_FILE ou .env
+        ├── constrói e valida AppConfig
+        ├── importa dist/nest/startApplication.js
+        └── inicia a aplicação NestJS
+```
+
+A aplicação não deve realizar leituras dispersas de `process.env` dentro de controllers, services ou repositories.
+
+A configuração validada é injetada por meio do container do NestJS.
+
+Erros de configuração interrompem o startup e são registrados de forma sanitizada, sem expor segredos ou valores sensíveis.
 
 ## Desenvolvimento local
 
-Instale dependencias, prepare variaveis locais, rode migrations em ambiente local/dev e inicie a API:
+Ambiente local canônico:
+
+```text
+Windows
+WSL 2
+Ubuntu 24.04 LTS
+Node.js 22 via NVM
+npm 10
+Docker Desktop com integração WSL
+```
+
+O projeto deve ser trabalhado no filesystem Linux do WSL.
+
+Instale as dependências:
 
 ```bash
 npm ci
-cp .env.local.example .env.local
-npm run db:migrate
-npm start
 ```
 
-Copiar `.env.local.example` e apenas um ponto de partida local. Os valores de `.env.local` devem ser revisados pelo desenvolvedor antes de executar a aplicacao.
+Prepare o arquivo local de ambiente:
 
-`.env.local` e secreto/local e nao deve ser commitado, impresso, copiado para documentacao ou usado como fonte para exemplos. Use `.env.local.example` como referencia segura de nomes.
+```bash
+cp .env.local.example .env.local
+```
 
-Pode existir apoio a Docker/MariaDB local via `docker-compose.yml`. Antes de usar Docker, inspecione o compose e confirme que os comandos apontam para ambiente local/dev. Nao execute comandos contra producao sem autorizacao explicita.
+Revise os valores de `.env.local` antes de iniciar a aplicação.
 
-## Variaveis de ambiente e Bootstrap
+O arquivo `.env.local` é secreto e não deve ser commitado, impresso ou utilizado como fonte de exemplos de documentação.
 
-Nao documente valores reais de variaveis neste README. Consulte `.env.local.example` para os nomes seguros.
+## Banco de dados local
 
-As variaveis de ambiente sao carregadas antes do import da aplicacao e validadas centralmente no bootstrap (portas, TTLs, timeouts, URLs e booleanos). Erros de configuracao interrompem o startup com log sanitizado. A documentacao detalhada do fluxo de bootstrap e regras de validacao reside em `docs/config-bootstrap.md`.
+Quando necessário, o MariaDB local pode ser iniciado com o apoio do `docker-compose.yml`.
 
-Categorias esperadas:
+Antes de usar Docker, confirme que o compose e as variáveis apontam somente para ambiente local.
 
-- runtime/server
-- database
-- allowed origin / CORS
-- admin/internal API keys
-- Steam API
-- uploads
-- Player Bunker
+Execute as migrations:
+
+```bash
+ENV_FILE=.env.local npm run db:migrate
+```
+
+Uma segunda execução, sem migrations pendentes, deve finalizar sem reaplicar arquivos já registrados.
+
+## Build
+
+O código NestJS é escrito em TypeScript e precisa ser compilado antes da inicialização em um checkout limpo:
+
+```bash
+npm run build:nest
+```
+
+O build utiliza:
+
+```text
+tsconfig.nest.json
+```
+
+A saída compilada é gravada em:
+
+```text
+dist/nest/
+```
+
+O diretório `dist/` não é fonte de código e não deve ser editado manualmente.
+
+## Inicialização local
+
+Após configurar o ambiente, executar migrations e compilar:
+
+```bash
+ENV_FILE=.env.local npm start
+```
+
+O comando `npm start` executa:
+
+```text
+node index.js
+```
+
+Para sobrescrever a porta local pelo processo:
+
+```bash
+PORT=3101 ENV_FILE=.env.local npm start
+```
+
+## Comandos principais
+
+```bash
+npm ci
+npm run build:nest
+npm run db:migrate
+npm start
+npm test
+```
 
 ## Migrations
 
-As migrations sao executadas por `scripts/migrate.js` via:
+As migrations são arquivos SQL numerados em:
 
-```bash
-npm run db:migrate
+```text
+db/migrations/
 ```
 
-Mudancas de banco devem ser feitas por novas migrations numeradas e revisaveis. Nao edite migrations ja aplicadas sem decisao explicita.
+Regras:
 
-Rode migrations somente em ambiente local/dev, salvo autorizacao explicita para outro ambiente. A politica local esta em `docs/db-migrations-policy.md`.
+* criar uma nova migration para cada mudança de schema;
+* não editar migrations já aplicadas;
+* manter arquivos idempotentes quando tecnicamente necessário;
+* registrar migrations somente após execução bem-sucedida;
+* executar migrations por CLI;
+* não executar migrations automaticamente no startup HTTP;
+* não habilitar `multipleStatements` nas conexões de runtime;
+* não introduzir ORM sem decisão arquitetural explícita.
 
-## Rotas e capacidades principais
+O runner utiliza uma conexão dedicada e uma tabela de controle:
 
-Este README lista apenas categorias de rotas e capacidades, sem prometer contrato detalhado:
-
-- `/health`
-- `/auth/*`
-- `/admin/*`
-- `/content/news/*`
-- `/content/seasons/*`
-- uploads admin
-- Steam profiles/cache interno, quando aplicavel
-
-Nao coloque tokens, headers secretos, cookies reais ou exemplos de admin key na documentacao.
-
-## Integracao com outros repos
-
-- `hsc-backoffice-admin` consome Admin APIs.
-- `hsc-cs2-portal` consome conteudo publico quando aplicavel.
-- `hsc-cs2-etl` pode consumir contratos publicos/internos para materializacao da Static API v2, como Seasons/Steam Profiles.
-- `hsc-docs` guarda a documentacao canonica.
-- `hsc-brand-hub` e separado e nao depende diretamente desta API.
-
-## Validacao local
-
-Com ambiente local/dev configurado, os comandos basicos de validacao sao:
-
-```bash
-npm run db:migrate
-npm start
+```text
+schema_migrations
 ```
 
-Smoke scripts locais podem existir em `ops/`, como apoio a validacao local. Nao rode scripts de deploy/release como validacao. Nao rode smokes ou migrations contra producao sem autorizacao explicita. Siga sempre `AGENTS.md`.
+Política detalhada:
 
-## Seguranca
+```text
+docs/db-migrations-policy.md
+```
 
-- Nunca commite `.env`, `.env.local` ou segredos.
-- Nunca imprima valores sensiveis em logs, PRs ou README.
-- Nao publique uploads fora da politica do projeto.
-- Nao exponha Admin APIs sem autenticacao/autorizacao.
-- Nao mude contratos publicos sem decisao explicita.
-- Nao adicione dependencias sem aprovacao.
-- Respeite `AGENTS.md`.
+## Rotas e capacidades
 
-## Documentacao relacionada
+Categorias principais:
 
-Documentacao local neste repositorio:
+```text
+GET  /health
 
-- `docs/config-bootstrap.md`
-- `docs/baseline-smoke.md`
-- `docs/db-migrations-policy.md`
-- `docs/admin/uploads.md`
-- `docs/steam-profiles.md`
+/auth/*
+/admin/*
 
-Documentacao canonica no repositorio `hsc-docs`:
+/content/news/*
+/content/seasons/*
 
-- `docs/00-governance/hsc-repositories-map.md`
-- `docs/04-infra-aws-lightsail/auth-api-operations.md`
-- `docs/04-infra-aws-lightsail/deploy-release-rollback.md`
-- `docs/05-backoffice-admin/admin-api-contracts.md`
-- `docs/05-backoffice-admin/news-admin-api-contracts.md`
-- `docs/05-backoffice-admin/news-admin-feature-implementation-spec.md`
+/player/auth/*
+/player/me
+/player/logout
+/player/bunker/*
 
-## Workflow
+/internal/*
+```
 
-- Trabalhe em branch.
-- Prefira PRs pequenos e focados.
-- Antes de finalizar, rode:
+O README não define o contrato completo de cada endpoint.
+
+Contratos HTTP, cookies, redirects, códigos de status e payloads devem ser consultados no código e na documentação específica antes de qualquer alteração.
+
+## Fronteiras de autenticação
+
+Admin Auth e Player Auth são domínios separados.
+
+Não devem compartilhar:
+
+* cookies;
+* sessões;
+* guards;
+* tabelas;
+* semântica de identidade;
+* autorização;
+* RBAC.
+
+Cookies conhecidos:
+
+```text
+hsc_admin_session
+hsc_player_session
+```
+
+Tokens, cookies, hashes de sessão, chaves administrativas e credenciais nunca devem ser impressos em logs, README, issues ou pull requests.
+
+## Player Bunker
+
+A Auth API atua como gateway autenticado do Player Bunker.
+
+Ela pode:
+
+* autenticar o jogador;
+* resolver o SteamID64 autenticado;
+* ler artefatos preparados pelo ETL;
+* sanitizar payloads;
+* retornar respostas defensivas;
+* enriquecer a identidade Steam quando houver fonte autorizada.
+
+Ela não pode:
+
+* recalcular ranking;
+* recalcular score;
+* recalcular elegibilidade competitiva;
+* inferir participação em Season;
+* modificar artefatos do ETL;
+* publicar artefatos competitivos;
+* consultar diretamente o banco MatchZy;
+* consultar diretamente o servidor CS2.
+
+O ETL é a fonte de materialização das estatísticas competitivas.
+
+## Uploads
+
+Uploads administrativos devem permanecer protegidos por autenticação e autorização.
+
+Arquivos publicados pelo runtime recebem controles como:
+
+```text
+X-Content-Type-Options: nosniff
+Cache-Control: public, max-age=31536000, immutable
+```
+
+A publicação de arquivos não deve permitir:
+
+* path traversal;
+* dotfiles;
+* index automático;
+* sobrescrita arbitrária;
+* exposição de caminhos locais;
+* bypass de autenticação administrativa.
+
+Documentação:
+
+```text
+docs/admin/uploads.md
+```
+
+## Perfis Steam
+
+O cache de perfis Steam é responsabilidade da Auth API.
+
+A identidade canônica deve preservar:
+
+* SteamID64;
+* nome atual do perfil Steam;
+* avatar autorizado;
+* URL pública do perfil, quando disponível.
+
+O SteamID64 é a identidade imutável. Nome e avatar são atributos mutáveis do perfil.
+
+Documentação:
+
+```text
+docs/steam-profiles.md
+```
+
+## Configuração
+
+Não documente valores reais de variáveis de ambiente.
+
+Use apenas:
+
+```text
+.env.local.example
+```
+
+Categorias de configuração:
+
+* runtime e porta;
+* banco de dados;
+* CORS;
+* Admin Auth;
+* Magic Link e SMTP;
+* Steam API e Steam OpenID;
+* Player Auth;
+* uploads;
+* Player Bunker;
+* APIs internas.
+
+Variáveis fornecidas diretamente ao processo têm precedência sobre o arquivo carregado por `ENV_FILE`.
+
+## Validação local
+
+Para mudanças em código NestJS:
+
+```bash
+npm run build:nest
+npm test
+git diff --check
+git diff --stat
+git status --short
+```
+
+Para mudanças exclusivamente documentais:
 
 ```bash
 git diff --check
@@ -170,4 +484,59 @@ git diff --stat
 git status --short
 ```
 
-Para mudancas de codigo, rode as validacoes relevantes. Para mudancas de README, valide whitespace e ausencia de segredo.
+Smokes, migrations e processos completos devem ser executados somente quando relevantes para a alteração.
+
+Não utilize scripts de deploy ou release como validação local.
+
+## Segurança
+
+* nunca commitar `.env` ou `.env.local`;
+* nunca registrar segredos em logs;
+* nunca expor cookies ou tokens;
+* nunca imprimir credenciais de banco;
+* nunca alterar contratos de autenticação como efeito colateral;
+* nunca executar migrations de produção sem aprovação explícita;
+* nunca executar deploy, release ou rollback sem aprovação explícita;
+* não adicionar ou atualizar dependências sem revisão;
+* não executar `npm audit fix --force`;
+* preservar a separação entre Admin Auth e Player Auth;
+* preservar a fronteira read-only do Player Bunker;
+* seguir `AGENTS.md`.
+
+## Documentação relacionada
+
+Decisões arquiteturais:
+
+* `docs/adr/0001-nestjs-modular-monolith-and-atomic-cutover.md`
+* `docs/adr/0002-direct-nestjs-replacement.md`
+
+Banco de dados:
+
+* `docs/db-migrations-policy.md`
+
+Funcionalidades:
+
+* `docs/admin/uploads.md`
+* `docs/steam-profiles.md`
+
+Governança operacional:
+
+* `AGENTS.md`
+
+Documentação canônica externa:
+
+* `hsc-docs/docs/00-governance/hsc-repositories-map.md`
+* `hsc-docs/docs/04-infra-aws-lightsail/auth-api-operations.md`
+* `hsc-docs/docs/04-infra-aws-lightsail/deploy-release-rollback.md`
+* `hsc-docs/docs/05-backoffice-admin/admin-api-contracts.md`
+
+## Workflow
+
+* partir de `main` sincronizada e limpa;
+* trabalhar em branch específica;
+* manter alterações pequenas e focadas;
+* não misturar documentação, runtime e infraestrutura sem necessidade;
+* revisar o diff antes do commit;
+* executar apenas as validações relevantes;
+* commit, push, PR, merge, release e deploy são ações humanas;
+* produção exige autorização explícita.
