@@ -9,6 +9,7 @@ import { buildPlayerBunkerConfig } from "./playerBunker.js";
 import { buildCorsConfig } from "./cors.js";
 import { buildDbRuntimeConfig } from "./db.js";
 import { buildSteamProfilesConfig } from "./steamProfiles.js";
+import { buildServerAccessConfig } from "./serverAccess.js";
 import { buildUploadsConfig } from "./uploads.js";
 
 export function buildRuntimeConfig(env = process.env) {
@@ -39,6 +40,7 @@ export function buildAppConfig(env = process.env) {
   const cors = buildCorsConfig(env);
   const db = buildDbRuntimeConfig(env);
   const steamProfiles = buildSteamProfilesConfig(env);
+  const serverAccess = buildServerAccessConfig(env);
   const uploads = buildUploadsConfig(env);
 
   return Object.freeze({
@@ -52,6 +54,7 @@ export function buildAppConfig(env = process.env) {
     cors,
     db,
     steamProfiles,
+    serverAccess,
     uploads,
   });
 }
