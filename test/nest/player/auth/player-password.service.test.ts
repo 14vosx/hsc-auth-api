@@ -74,3 +74,24 @@ test("PlayerPasswordService - rejeita hashes inválidos", async () => {
     false,
   );
 });
+
+test("PlayerPasswordService - dummy verification preserva resposta falsa sem identidade", async () => {
+  const service = new PlayerPasswordService();
+
+  assert.equal(
+    await service.verifyPasswordOrDummy(
+      "any-password-value",
+      null,
+    ),
+    false,
+  );
+});
+
+test("PlayerPasswordService - dummy verification também rejeita entrada fora da política", async () => {
+  const service = new PlayerPasswordService();
+
+  assert.equal(
+    await service.verifyPasswordOrDummy("short", null),
+    false,
+  );
+});
