@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.nest.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist-test",
+    "noEmitOnError": true
+  },
+  "include": [
+    "src/nest/**/*.ts",
+    "test/nest/**/*.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-test"
+  ]
+}
