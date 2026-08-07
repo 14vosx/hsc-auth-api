@@ -6,7 +6,18 @@ import {
   Inject,
   Post,
   Res,
+  UseGuards,
 } from "@nestjs/common";
+import {
+  Throttle,
+  minutes,
+} from "@nestjs/throttler";
+import {
+  PlayerEmailThrottlerGuard,
+} from "../security/player-email-throttler.guard.js";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
 import {
   APP_CONFIG,
   AppConfig,
@@ -52,6 +63,16 @@ export class PlayerEmailLoginController {
   ) {}
 
   @Post("login")
+  @UseGuards(
+    PlayerCsrfGuard,
+    PlayerEmailThrottlerGuard,
+  )
+  @Throttle({
+    default: {
+      limit: 10,
+      ttl: minutes(15),
+    },
+  })
   async login(
     @Body() body: unknown,
     @Res({ passthrough: true })

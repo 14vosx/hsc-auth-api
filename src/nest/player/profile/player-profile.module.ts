@@ -13,6 +13,9 @@ import {
   PlayerAuthModule,
 } from "../auth/player-auth.module.js";
 import {
+  PlayerSecurityModule,
+} from "../security/player-security.module.js";
+import {
   PlayerProfileController,
 } from "./player-profile.controller.js";
 import {
@@ -47,6 +50,7 @@ import {
   imports: [
     CoreConfigModule,
     PlayerAuthModule,
+    PlayerSecurityModule,
     MulterModule.registerAsync({
       inject: [APP_CONFIG],
       useFactory(

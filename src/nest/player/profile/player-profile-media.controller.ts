@@ -13,6 +13,16 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import {
+  Throttle,
+  minutes,
+} from "@nestjs/throttler";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
+import {
+  PlayerAccountThrottlerGuard,
+} from "../security/player-account-throttler.guard.js";
+import {
   FileInterceptor,
 } from "@nestjs/platform-express";
 import type {
@@ -148,7 +158,17 @@ function unwrapMediaResult(
 @Controller(
   "player/profile/me",
 )
-@UseGuards(PlayerAuthGuard)
+@UseGuards(
+  PlayerAuthGuard,
+  PlayerCsrfGuard,
+  PlayerAccountThrottlerGuard,
+)
+@Throttle({
+  default: {
+    limit: 20,
+    ttl: minutes(15),
+  },
+})
 @UseFilters(
   PlayerProfileMediaExceptionFilter,
 )

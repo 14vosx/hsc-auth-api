@@ -6,7 +6,15 @@ import {
   HttpStatus,
   Inject,
   Post,
+  UseGuards,
 } from "@nestjs/common";
+import {
+  Throttle,
+  hours,
+} from "@nestjs/throttler";
+import {
+  PlayerEmailThrottlerGuard,
+} from "../security/player-email-throttler.guard.js";
 import { DatabaseService } from "../../database/database.service.js";
 import {
   PlayerEmailRegistrationService,
@@ -56,6 +64,15 @@ export class PlayerEmailRegistrationController {
   ) {}
 
   @Post("register")
+  @UseGuards(
+    PlayerEmailThrottlerGuard,
+  )
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: hours(1),
+    },
+  })
   @HttpCode(HttpStatus.ACCEPTED)
   async register(
     @Body() body: unknown,

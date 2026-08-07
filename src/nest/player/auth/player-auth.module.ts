@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PlayerSecurityModule } from "../security/player-security.module.js";
 import { PlayerMeController } from "./player-me.controller.js";
 import { PlayerLogoutController } from "./player-logout.controller.js";
 import { PlayerSteamAuthController } from "./player-steam-auth.controller.js";
@@ -37,6 +38,9 @@ import { PlayerEmailLinkConfirmService } from "./player-email-link-confirm.servi
 import { PlayerEmailLinkConfirmController } from "./player-email-link-confirm.controller.js";
 
 @Module({
+  imports: [
+    PlayerSecurityModule,
+  ],
   controllers: [
     PlayerMeController,
     PlayerLogoutController,

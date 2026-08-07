@@ -14,6 +14,7 @@
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/throttler": "^6.5.0",
     "dotenv": "^17.3.1",
     "mysql2": "^3.18.0",
     "nodemailer": "^9.0.3",
