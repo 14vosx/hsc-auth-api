@@ -65,9 +65,6 @@ test("PATCH normaliza campos válidos sem aceitar propriedades arbitrárias", ()
       displayName: "  Lavos  ",
       slug: "  Lavos-CS2 ",
       bio: " Heavy roots\nCS2 player ",
-      avatarUrl:
-        "https://cdn.example.com/avatar.png",
-      bannerUrl: null,
       discordHandle: " lavos ",
       preferredRole: " AWPer ",
       preferredMap: " DE_MIRAGE ",
@@ -81,9 +78,6 @@ test("PATCH normaliza campos válidos sem aceitar propriedades arbitrárias", ()
         displayName: "Lavos",
         slug: "lavos-cs2",
         bio: "Heavy roots\nCS2 player",
-        avatarUrl:
-          "https://cdn.example.com/avatar.png",
-        bannerUrl: null,
         discordHandle: "lavos",
         preferredRole: "awper",
         preferredMap: "de_mirage",
@@ -137,26 +131,27 @@ test("PATCH recusa role e mapa fora dos catálogos", () => {
   );
 });
 
-test("PATCH recusa URLs não HTTPS", () => {
+test("PATCH exige upload dedicado para avatar e banner", () => {
   assert.deepEqual(
     validatePlayerProfilePatch({
       avatarUrl:
-        "http://example.com/avatar.png",
+        "https://cdn.example.com/avatar.png",
     }),
     {
       ok: false,
-      error: "invalid_avatar_url",
+      error:
+        "profile_media_must_be_uploaded",
     },
   );
 
   assert.deepEqual(
     validatePlayerProfilePatch({
-      bannerUrl:
-        "javascript:alert(1)",
+      bannerUrl: null,
     }),
     {
       ok: false,
-      error: "invalid_banner_url",
+      error:
+        "profile_media_must_be_uploaded",
     },
   );
 });
@@ -165,8 +160,6 @@ test("PATCH aceita null para limpar campos opcionais", () => {
   assert.deepEqual(
     validatePlayerProfilePatch({
       bio: null,
-      avatarUrl: null,
-      bannerUrl: null,
       discordHandle: null,
       preferredRole: null,
       preferredMap: null,
@@ -175,8 +168,6 @@ test("PATCH aceita null para limpar campos opcionais", () => {
       ok: true,
       patch: {
         bio: null,
-        avatarUrl: null,
-        bannerUrl: null,
         discordHandle: null,
         preferredRole: null,
         preferredMap: null,

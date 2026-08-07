@@ -151,3 +151,40 @@ test("PlayerProfileService - PATCH inválido não alcança repository", async ()
     false,
   );
 });
+
+test("PlayerProfileService - PATCH de media não alcança repository", async () => {
+  let repositoryCalled = false;
+
+  const service =
+    new PlayerProfileService({
+      async ensureProfileForAccount() {
+        throw new Error("unexpected");
+      },
+
+      async updateProfileForAccount() {
+        repositoryCalled = true;
+
+        throw new Error("unexpected");
+      },
+    });
+
+  assert.deepEqual(
+    await service.updateMyProfile(
+      "account-id",
+      {
+        avatarUrl:
+          "https://cdn.example.com/avatar.png",
+      },
+    ),
+    {
+      ok: false,
+      error:
+        "profile_media_must_be_uploaded",
+    },
+  );
+
+  assert.equal(
+    repositoryCalled,
+    false,
+  );
+});

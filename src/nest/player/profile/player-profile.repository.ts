@@ -42,8 +42,6 @@ export interface PlayerProfileUpdateInput {
   displayName?: string;
   slug?: string;
   bio?: string | null;
-  avatarUrl?: string | null;
-  bannerUrl?: string | null;
   discordHandle?: string | null;
   preferredRole?: string | null;
   preferredMap?: string | null;
@@ -62,6 +60,23 @@ export type PlayerProfileUpdateResult =
         | "player_account_disabled"
         | "slug_unavailable"
         | "public_profile_requires_custom_slug";
+    };
+
+export type PlayerProfileMediaKind =
+  | "avatar"
+  | "banner";
+
+export type PlayerProfileMediaUpdateResult =
+  | {
+      ok: true;
+      profile: PlayerProfile;
+      previousMediaUrl: string | null;
+    }
+  | {
+      ok: false;
+      error:
+        | "player_account_not_found"
+        | "player_account_disabled";
     };
 
 interface RawAccountRow extends RowDataPacket {
@@ -443,16 +458,6 @@ export class PlayerProfileRepository {
           values.push(patch.bio);
         }
 
-        if (patch.avatarUrl !== undefined) {
-          assignments.push("avatar_url = ?");
-          values.push(patch.avatarUrl);
-        }
-
-        if (patch.bannerUrl !== undefined) {
-          assignments.push("banner_url = ?");
-          values.push(patch.bannerUrl);
-        }
-
         if (patch.discordHandle !== undefined) {
           assignments.push("discord_handle = ?");
           values.push(patch.discordHandle);
@@ -521,6 +526,189 @@ export class PlayerProfileRepository {
             error: "slug_unavailable",
           };
         }
+
+        throw error;
+      }
+    } finally {
+      connection.release();
+    }
+  }
+
+
+  async updateMediaForAccount(
+    playerAccountId: string,
+    mediaKind: PlayerProfileMediaKind,
+    mediaUrl: string | null,
+  ): Promise<PlayerProfileMediaUpdateResult> {
+    if (
+      mediaKind !== "avatar" &&
+      mediaKind !== "banner"
+    ) {
+      throw new Error(
+        "invalid_player_profile_media_kind",
+      );
+    }
+
+    const pool =
+      this.databaseService.getPool();
+
+    const connection =
+      await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      try {
+        const [accountRows] =
+          await connection.execute<RawAccountRow[]>(
+            `
+              SELECT
+                id,
+                status,
+                display_name
+              FROM player_accounts
+              WHERE id = ?
+              LIMIT 1
+              FOR UPDATE
+            `,
+            [playerAccountId],
+          );
+
+        const account =
+          accountRows[0];
+
+        if (!account) {
+          await connection.commit();
+
+          return {
+            ok: false,
+            error:
+              "player_account_not_found",
+          };
+        }
+
+        if (account.status !== "active") {
+          await connection.commit();
+
+          return {
+            ok: false,
+            error:
+              "player_account_disabled",
+          };
+        }
+
+        const [existingRows] =
+          await connection.execute<RawProfileRow[]>(
+            `${PROFILE_SELECT} FOR UPDATE`,
+            [playerAccountId],
+          );
+
+        const existingProfile =
+          existingRows[0];
+
+        let previousMediaUrl:
+          | string
+          | null = null;
+
+        if (!existingProfile) {
+          const profileId =
+            randomUUID();
+
+          const initialProfile =
+            buildInitialPlayerProfileValues(
+              playerAccountId,
+              account.display_name,
+            );
+
+          await connection.execute<ResultSetHeader>(
+            `
+              INSERT INTO player_profiles (
+                id,
+                player_account_id,
+                display_name,
+                slug,
+                bio,
+                avatar_url,
+                banner_url,
+                discord_handle,
+                preferred_role,
+                preferred_map,
+                visibility,
+                joined_at
+              )
+              VALUES (
+                ?,
+                ?,
+                ?,
+                ?,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                'private',
+                UTC_TIMESTAMP()
+              )
+            `,
+            [
+              profileId,
+              playerAccountId,
+              initialProfile.displayName,
+              initialProfile.slug,
+            ],
+          );
+        } else {
+          previousMediaUrl =
+            mediaKind === "avatar"
+              ? existingProfile.avatar_url ?? null
+              : existingProfile.banner_url ?? null;
+        }
+
+        const mediaColumn =
+          mediaKind === "avatar"
+            ? "avatar_url"
+            : "banner_url";
+
+        await connection.execute<ResultSetHeader>(
+          `
+            UPDATE player_profiles
+            SET ${mediaColumn} = ?
+            WHERE player_account_id = ?
+          `,
+          [
+            mediaUrl,
+            playerAccountId,
+          ],
+        );
+
+        const [updatedRows] =
+          await connection.execute<RawProfileRow[]>(
+            PROFILE_SELECT,
+            [playerAccountId],
+          );
+
+        const updated =
+          updatedRows[0];
+
+        if (!updated) {
+          throw new Error(
+            "player_profile_media_update_not_visible",
+          );
+        }
+
+        await connection.commit();
+
+        return {
+          ok: true,
+          profile:
+            mapProfileRow(updated),
+          previousMediaUrl,
+        };
+      } catch (error) {
+        try {
+          await connection.rollback();
+        } catch {}
 
         throw error;
       }
