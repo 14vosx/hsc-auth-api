@@ -7,6 +7,7 @@ import type {
 import { DatabaseService } from "../../database/database.service.js";
 import {
   buildInitialPlayerProfileValues,
+  isTechnicalPlayerProfileSlug,
 } from "./player-profile.defaults.js";
 
 export interface PlayerProfile {
@@ -59,7 +60,8 @@ export type PlayerProfileUpdateResult =
       error:
         | "player_account_not_found"
         | "player_account_disabled"
-        | "slug_unavailable";
+        | "slug_unavailable"
+        | "public_profile_requires_custom_slug";
     };
 
 interface RawAccountRow extends RowDataPacket {
@@ -332,7 +334,15 @@ export class PlayerProfileRepository {
             [playerAccountId],
           );
 
-        if (!existingRows[0]) {
+        const existingProfile =
+          existingRows[0];
+
+        let currentSlug: string;
+        let currentVisibility:
+          | "private"
+          | "public";
+
+        if (!existingProfile) {
           const profileId = randomUUID();
 
           const initialProfile =
@@ -340,6 +350,12 @@ export class PlayerProfileRepository {
               playerAccountId,
               account.display_name,
             );
+
+          currentSlug =
+            initialProfile.slug;
+
+          currentVisibility =
+            "private";
 
           await connection.execute<ResultSetHeader>(
             `
@@ -379,6 +395,34 @@ export class PlayerProfileRepository {
               initialProfile.slug,
             ],
           );
+        } else {
+          currentSlug =
+            existingProfile.slug;
+
+          currentVisibility =
+            existingProfile.visibility;
+        }
+
+        const resultingSlug =
+          patch.slug ?? currentSlug;
+
+        const resultingVisibility =
+          patch.visibility ??
+          currentVisibility;
+
+        if (
+          resultingVisibility === "public" &&
+          isTechnicalPlayerProfileSlug(
+            resultingSlug,
+          )
+        ) {
+          await connection.rollback();
+
+          return {
+            ok: false,
+            error:
+              "public_profile_requires_custom_slug",
+          };
         }
 
         const assignments: string[] = [];

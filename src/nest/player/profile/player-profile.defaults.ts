@@ -33,3 +33,9 @@ export function buildInitialPlayerProfileValues(
     slug: `player-${compactId}`,
   };
 }
+
+export function isTechnicalPlayerProfileSlug(
+  slug: string,
+): boolean {
+  return /^player-[0-9a-f]{32}$/.test(slug);
+}

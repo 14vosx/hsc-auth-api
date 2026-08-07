@@ -866,3 +866,93 @@ test("PlayerProfileRepository - conflito UNIQUE de slug faz rollback e retorna s
     "release",
   ]);
 });
+
+test("PlayerProfileRepository - perfil não pode ser publicado mantendo slug técnico", async () => {
+  const calls: string[] = [];
+  let executeCount = 0;
+
+  const technicalProfile = {
+    ...PROFILE_ROW,
+    slug:
+      "player-0123456789abcdef0123456789abcdef",
+    visibility: "private" as const,
+  };
+
+  const connection = {
+    async beginTransaction() {
+      calls.push("begin");
+    },
+
+    async execute() {
+      executeCount += 1;
+
+      if (executeCount === 1) {
+        return [[{
+          id: ACCOUNT_ID,
+          status: "active",
+          display_name: "Conta",
+        }]];
+      }
+
+      if (executeCount === 2) {
+        return [[technicalProfile]];
+      }
+
+      throw new Error(
+        "unexpected_execute",
+      );
+    },
+
+    async commit() {
+      calls.push("commit");
+    },
+
+    async rollback() {
+      calls.push("rollback");
+    },
+
+    release() {
+      calls.push("release");
+    },
+  };
+
+  const databaseService = {
+    getPool() {
+      return {
+        async getConnection() {
+          return connection;
+        },
+      };
+    },
+  } as unknown as DatabaseService;
+
+  const repository =
+    new PlayerProfileRepository(
+      databaseService,
+    );
+
+  assert.deepEqual(
+    await repository.updateProfileForAccount(
+      ACCOUNT_ID,
+      {
+        visibility: "public",
+      },
+    ),
+    {
+      ok: false,
+      error:
+        "public_profile_requires_custom_slug",
+    },
+  );
+
+  assert.equal(
+    executeCount,
+    2,
+  );
+
+  assert.deepEqual(calls, [
+    "begin",
+    "rollback",
+    "release",
+  ]);
+});
