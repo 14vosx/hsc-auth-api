@@ -8,6 +8,7 @@ import { ContentSeasonsModule } from "./content/seasons/content-seasons.module.j
 import { AdminAuthModule } from "./admin/auth/admin-auth.module.js";
 import { AdminSchemaModule } from "./admin/schema/admin-schema.module.js";
 import { PlayerAuthModule } from "./player/auth/player-auth.module.js";
+import { PlayerAccountModule } from "./player/account/player-account.module.js";
 import { PlayerBunkerModule } from "./player/bunker/player-bunker.module.js";
 import { PlayerProfileModule } from "./player/profile/player-profile.module.js";
 import { PlayerMembershipModule } from "./player/membership/player-membership.module.js";
@@ -32,6 +33,7 @@ export class AppModule {
         AdminAuthModule,
         AdminSchemaModule,
         PlayerAuthModule,
+        PlayerAccountModule,
         PlayerBunkerModule,
         PlayerProfileModule,
         PlayerMembershipModule,
