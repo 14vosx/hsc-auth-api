@@ -3,15 +3,32 @@ import { AppConfig, APP_CONFIG } from "../../core/app-config.js";
 import { ContentSeasonsRepository, SeasonRow } from "../../content/seasons/content-seasons.repository.js";
 import { PlayerIdentity } from "../auth/player-auth.service.js";
 import { SeasonPlayerArtifactService } from "./season-player-artifact.service.js";
+import {
+  SeasonPlayerManifestService,
+  SeasonPlayerManifestResult,
+} from "./season-player-manifest.service.js";
 import { CompetitiveProfileService, CompetitiveProfileResult } from "./competitive-profile.service.js";
 
 const SENSITIVE_ARTIFACT_KEY_RE = /(token|cookie|hash)/i;
+
+const SAFE_SEASON_PLAYER_ARTIFACT_KEYS = [
+  "generatedAt",
+  "season",
+  "steamid64",
+  "name",
+  "summary",
+  "periods",
+  "byMap",
+  "recentMaps",
+  "timeline",
+] as const;
 
 @Injectable()
 export class PlayerBunkerSummaryService {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly seasonsRepository: ContentSeasonsRepository,
+    private readonly manifestService: SeasonPlayerManifestService,
     private readonly artifactService: SeasonPlayerArtifactService,
     private readonly competitiveProfileService: CompetitiveProfileService,
   ) {}
@@ -29,6 +46,22 @@ export class PlayerBunkerSummaryService {
       Object.entries(value as Record<string, unknown>)
         .filter(([key]) => !SENSITIVE_ARTIFACT_KEY_RE.test(key))
         .map(([key, item]) => [key, this.sanitizeArtifact(item)]),
+    );
+  }
+
+  private sanitizeSeasonPlayerArtifact(
+    artifact: unknown,
+  ): Record<string, unknown> | null {
+    if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+      return null;
+    }
+
+    const obj = artifact as Record<string, unknown>;
+
+    return Object.fromEntries(
+      SAFE_SEASON_PLAYER_ARTIFACT_KEYS
+        .filter((key) => Object.prototype.hasOwnProperty.call(obj, key))
+        .map((key) => [key, this.sanitizeArtifact(obj[key])]),
     );
   }
 
@@ -64,6 +97,26 @@ export class PlayerBunkerSummaryService {
       ...(avatarMedium ? { avatarMedium } : {}),
       ...(steamProfileUrl ? { steamProfileUrl } : {}),
     };
+  }
+
+  private buildManifestFallbackNote(
+    manifestResult: SeasonPlayerManifestResult,
+  ): string {
+    if (manifestResult.ok) {
+      return "season_player_artifact_unavailable";
+    }
+
+    switch (manifestResult.reason) {
+      case "not_configured":
+        return "not_configured";
+      case "not_found":
+      case "player_not_listed":
+        return "not_found";
+      case "season_mismatch":
+        return "season_artifact_slug_mismatch";
+      default:
+        return "season_player_artifact_unavailable";
+    }
   }
 
   private buildCompetitiveProfileNotes(
@@ -172,7 +225,8 @@ export class PlayerBunkerSummaryService {
     competitiveProfileResult: CompetitiveProfileResult;
     activeSeason: SeasonRow;
   }) {
-    const seasonPlayer = this.sanitizeArtifact(input.artifact);
+    const seasonPlayer =
+      this.sanitizeSeasonPlayerArtifact(input.artifact);
     const competitiveProfile = input.competitiveProfileResult.ok
       ? input.competitiveProfileResult.profile
       : null;
@@ -238,6 +292,31 @@ export class PlayerBunkerSummaryService {
       });
     }
 
+    let manifestResult: SeasonPlayerManifestResult;
+    try {
+      manifestResult = await this.manifestService.read({
+        root: bunkerConfig.artifactRoot,
+        seasonSlug: activeSeason.slug,
+        steamid64: player.steamid64,
+      });
+    } catch {
+      return this.buildFallbackData({
+        player,
+        note: "season_player_artifact_unavailable",
+        competitiveProfileResult,
+        activeSeason,
+      });
+    }
+
+    if (!manifestResult.ok) {
+      return this.buildFallbackData({
+        player,
+        note: this.buildManifestFallbackNote(manifestResult),
+        competitiveProfileResult,
+        activeSeason,
+      });
+    }
+
     try {
       const result = await this.artifactService.read({
         root: bunkerConfig.artifactRoot,
@@ -261,6 +340,15 @@ export class PlayerBunkerSummaryService {
         return this.buildReadyData({
           player,
           artifact: result.artifact,
+          competitiveProfileResult,
+          activeSeason,
+        });
+      }
+
+      if (result.reason === "season_mismatch") {
+        return this.buildFallbackData({
+          player,
+          note: "season_artifact_slug_mismatch",
           competitiveProfileResult,
           activeSeason,
         });
