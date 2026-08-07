@@ -2,30 +2,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCors } from "../../src/config/cors.js";
+import { buildCorsConfig } from "../../src/config/cors.js";
 
-test("buildCors - utiliza mapa explícito de ambiente", () => {
+test("buildCorsConfig - utiliza mapa explícito de ambiente", () => {
   const env = {
     ALLOWED_ORIGINS: "https://foo.com, https://bar.com/",
   };
 
-  const corsBundle = buildCors(env);
+  const config = buildCorsConfig(env);
 
-  assert.equal(corsBundle.corsMeta.allowedOrigin, "https://foo.com");
-  assert.deepEqual(corsBundle.corsMeta.allowedOrigins, [
+  assert.equal(config.allowedOrigin, "https://foo.com");
+  assert.deepEqual(config.allowedOrigins, [
     "https://foo.com",
     "https://bar.com",
   ]);
 });
 
-test("buildCors - preserva fallback padrão se env estiver vazio", () => {
-  const corsBundle = buildCors({});
+test("buildCorsConfig - preserva fallback padrão se env estiver vazio", () => {
+  const config = buildCorsConfig({});
 
   assert.equal(
-    corsBundle.corsMeta.allowedOrigin,
+    config.allowedOrigin,
     "https://auth-api.haxixesmokeclub.com",
   );
-  assert.deepEqual(corsBundle.corsMeta.allowedOrigins, [
+  assert.deepEqual(config.allowedOrigins, [
     "https://auth-api.haxixesmokeclub.com",
   ]);
 });
