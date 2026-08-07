@@ -82,6 +82,9 @@ export interface AppConfig {
     readonly cacheTtlSeconds: number;
     readonly timeoutSeconds: number;
   };
+  readonly serverAccess: {
+    readonly internalApiKey: string;
+  };
   readonly uploads: {
     readonly uploadDir: string;
     readonly publicPath: string;

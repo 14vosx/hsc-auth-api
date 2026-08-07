@@ -15,6 +15,7 @@ import { PlayerMembershipModule } from "./player/membership/player-membership.mo
 import { AdminUsersModule } from "./admin/users/admin-users.module.js";
 import { AdminNewsModule } from "./admin/news/admin-news.module.js";
 import { InternalSteamProfilesModule } from "./internal/steam/internal-steam-profiles.module.js";
+import { ServerAccessModule } from "./internal/server-access/server-access.module.js";
 import { AdminUploadsModule } from "./admin/uploads/admin-uploads.module.js";
 import { AdminSeasonsModule } from "./admin/seasons/admin-seasons.module.js";
 import { AdminMembershipModule } from "./admin/membership/admin-membership.module.js";
@@ -41,6 +42,7 @@ export class AppModule {
         AdminUsersModule,
         AdminNewsModule,
         InternalSteamProfilesModule,
+        ServerAccessModule,
         AdminUploadsModule,
         AdminSeasonsModule,
         AdminMembershipModule,

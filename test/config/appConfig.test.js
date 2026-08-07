@@ -52,6 +52,7 @@ test("buildAppConfig - defaults", () => {
   assert.equal(config.playerBunker.activeSeasonSlug, "");
   assert.equal(config.playerBunker.staticApiBaseUrl, "");
   assert.equal(config.playerBunker.staticApiTimeoutMs, 1500);
+  assert.equal(config.serverAccess.internalApiKey, "");
 });
 
 test("buildAppConfig - valores válidos", () => {
@@ -293,4 +294,23 @@ test("buildAppConfig - Player Email Auth habilitado aceita transporte SMTP compa
   assert.equal(config.mailTransport.port, 465);
   assert.equal(config.mailTransport.secure, true);
   assert.equal(config.mailTransport.user, "hsc");
+});
+
+test("buildAppConfig - Server Access usa credencial interna dedicada", () => {
+  const config = buildAppConfig({
+    INTERNAL_API_KEY:
+      "steam-profile-key",
+    SERVER_ACCESS_INTERNAL_API_KEY:
+      "server-access-key",
+  });
+
+  assert.equal(
+    config.steamProfiles.internalApiKey,
+    "steam-profile-key",
+  );
+
+  assert.equal(
+    config.serverAccess.internalApiKey,
+    "server-access-key",
+  );
 });
