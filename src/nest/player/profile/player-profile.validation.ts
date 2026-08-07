@@ -15,8 +15,6 @@ export interface PlayerProfilePatch {
   displayName?: string;
   slug?: string;
   bio?: string | null;
-  avatarUrl?: string | null;
-  bannerUrl?: string | null;
   discordHandle?: string | null;
   preferredRole?: PlayerProfilePreferredRole | null;
   preferredMap?: PlayerProfilePreferredMap | null;
@@ -29,8 +27,7 @@ export type PlayerProfilePatchValidationError =
   | "invalid_slug"
   | "slug_reserved"
   | "invalid_bio"
-  | "invalid_avatar_url"
-  | "invalid_banner_url"
+  | "profile_media_must_be_uploaded"
   | "invalid_discord_handle"
   | "invalid_preferred_role"
   | "invalid_preferred_map"
@@ -129,65 +126,6 @@ function normalizeNullableText(
   };
 }
 
-function normalizeHttpsUrl(
-  input: unknown,
-): { ok: true; value: string | null } | { ok: false } {
-  if (input === null) {
-    return {
-      ok: true,
-      value: null,
-    };
-  }
-
-  if (typeof input !== "string") {
-    return {
-      ok: false,
-    };
-  }
-
-  const value = input.trim();
-
-  if (!value) {
-    return {
-      ok: true,
-      value: null,
-    };
-  }
-
-  if (
-    unicodeLength(value) > 2048 ||
-    containsForbiddenControlCharacters(value)
-  ) {
-    return {
-      ok: false,
-    };
-  }
-
-  try {
-    const url = new URL(value);
-
-    if (
-      url.protocol !== "https:" ||
-      !url.hostname ||
-      url.username ||
-      url.password
-    ) {
-      return {
-        ok: false,
-      };
-    }
-
-    return {
-      ok: true,
-      value: url.toString(),
-    };
-  } catch {
-    return {
-      ok: false,
-    };
-  }
-}
-
 export function validatePlayerProfilePatch(
   body: unknown,
 ): PlayerProfilePatchValidationResult {
@@ -204,6 +142,23 @@ export function validatePlayerProfilePatch(
 
   const input = body as Record<string, unknown>;
   const patch: PlayerProfilePatch = {};
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      input,
+      "avatarUrl",
+    ) ||
+    Object.prototype.hasOwnProperty.call(
+      input,
+      "bannerUrl",
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "profile_media_must_be_uploaded",
+    };
+  }
 
   if (
     Object.prototype.hasOwnProperty.call(
@@ -299,44 +254,6 @@ export function validatePlayerProfilePatch(
     }
 
     patch.bio = bio.value;
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(
-      input,
-      "avatarUrl",
-    )
-  ) {
-    const avatarUrl =
-      normalizeHttpsUrl(input.avatarUrl);
-
-    if (!avatarUrl.ok) {
-      return {
-        ok: false,
-        error: "invalid_avatar_url",
-      };
-    }
-
-    patch.avatarUrl = avatarUrl.value;
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(
-      input,
-      "bannerUrl",
-    )
-  ) {
-    const bannerUrl =
-      normalizeHttpsUrl(input.bannerUrl);
-
-    if (!bannerUrl.ok) {
-      return {
-        ok: false,
-        error: "invalid_banner_url",
-      };
-    }
-
-    patch.bannerUrl = bannerUrl.value;
   }
 
   if (
