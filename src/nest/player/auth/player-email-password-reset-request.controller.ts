@@ -6,7 +6,15 @@ import {
   HttpStatus,
   Inject,
   Post,
+  UseGuards,
 } from "@nestjs/common";
+import {
+  Throttle,
+  hours,
+} from "@nestjs/throttler";
+import {
+  PlayerEmailThrottlerGuard,
+} from "../security/player-email-throttler.guard.js";
 import { DatabaseService } from "../../database/database.service.js";
 import {
   PlayerEmailPasswordResetRequestService,
@@ -59,6 +67,15 @@ export class PlayerEmailPasswordResetRequestController {
   ) {}
 
   @Post("request")
+  @UseGuards(
+    PlayerEmailThrottlerGuard,
+  )
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: hours(1),
+    },
+  })
   @HttpCode(HttpStatus.ACCEPTED)
   async request(@Body() body: unknown) {
     if (!this.databaseService.getStatus().ready) {

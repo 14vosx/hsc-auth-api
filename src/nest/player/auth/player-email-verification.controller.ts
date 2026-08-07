@@ -7,7 +7,11 @@ import {
   Inject,
   Post,
   Res,
+  UseGuards,
 } from "@nestjs/common";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
 import {
   APP_CONFIG,
   AppConfig,
@@ -53,6 +57,9 @@ export class PlayerEmailVerificationController {
   ) {}
 
   @Post("verify")
+  @UseGuards(
+    PlayerCsrfGuard,
+  )
   @HttpCode(HttpStatus.OK)
   async verify(
     @Body() body: unknown,

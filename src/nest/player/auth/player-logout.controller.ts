@@ -1,8 +1,18 @@
-import { Controller, Post, Headers, Res, Inject } from "@nestjs/common";
+import {
+  Controller,
+  Post,
+  Headers,
+  Res,
+  Inject,
+  UseGuards,
+} from "@nestjs/common";
 import { AppConfig, APP_CONFIG } from "../../core/app-config.js";
 import { PlayerSessionRepository } from "./player-session.repository.js";
 import { parseCookieHeader } from "../../core/http/parse-cookie-header.js";
 import { buildClearPlayerSessionCookie } from "./build-player-session-cookie.js";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
 
 interface CustomResponse {
   setHeader(name: string, value: string): void;
@@ -16,6 +26,9 @@ export class PlayerLogoutController {
   ) {}
 
   @Post("logout")
+  @UseGuards(
+    PlayerCsrfGuard,
+  )
   async logout(
     @Headers("cookie") cookieHeader: string | undefined,
     @Res({ passthrough: true }) response: CustomResponse,

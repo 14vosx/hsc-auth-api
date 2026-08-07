@@ -9,6 +9,16 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
+import {
+  Throttle,
+  hours,
+} from "@nestjs/throttler";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
+import {
+  PlayerAccountThrottlerGuard,
+} from "../security/player-account-throttler.guard.js";
 import type {
   PlayerIdentity,
 } from "./player-auth.service.js";
@@ -47,7 +57,17 @@ const GENERIC_RESPONSE = {
 };
 
 @Controller("player/auth/email/link")
-@UseGuards(PlayerAuthGuard)
+@UseGuards(
+  PlayerAuthGuard,
+  PlayerCsrfGuard,
+  PlayerAccountThrottlerGuard,
+)
+@Throttle({
+  default: {
+    limit: 5,
+    ttl: hours(1),
+  },
+})
 export class PlayerEmailLinkRequestController {
   constructor(
     @Inject(PlayerEmailLinkRequestService)

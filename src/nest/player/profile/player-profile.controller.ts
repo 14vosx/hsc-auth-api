@@ -9,6 +9,16 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
+import {
+  Throttle,
+  minutes,
+} from "@nestjs/throttler";
+import {
+  PlayerCsrfGuard,
+} from "../security/player-csrf.guard.js";
+import {
+  PlayerAccountThrottlerGuard,
+} from "../security/player-account-throttler.guard.js";
 import type {
   PlayerIdentity,
 } from "../auth/player-auth.service.js";
@@ -124,6 +134,16 @@ export class PlayerProfileController {
   }
 
   @Patch("me")
+  @UseGuards(
+    PlayerCsrfGuard,
+    PlayerAccountThrottlerGuard,
+  )
+  @Throttle({
+    default: {
+      limit: 30,
+      ttl: minutes(15),
+    },
+  })
   async updateMe(
     @Req() request: PlayerProfileRequest,
     @Body() body: unknown,
