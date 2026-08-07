@@ -98,8 +98,27 @@ fi
 echo "➡️  Checkout forçado da tag (detached HEAD)..."
 git checkout -f "$TAG"
 
-echo "➡️  Instalando dependências (npm ci)..."
-npm ci --omit=dev
+echo "➡️  Instalando dependências..."
+npm ci
+
+HAS_BUILD_NEST="$(node -e '
+try {
+  const pkg = JSON.parse(require("fs").readFileSync("package.json", "utf8"));
+  console.log(Boolean(pkg && pkg.scripts && pkg.scripts["build:nest"]) ? "true" : "false");
+} catch {
+  console.log("false");
+}
+')"
+
+if [[ "$HAS_BUILD_NEST" == "true" ]]; then
+  echo "🔨 Compilando runtime NestJS (npm run build:nest)..."
+  npm run build:nest
+else
+  echo "ℹ️  Tag anterior ao runtime NestJS (build:nest ausente). Pulando build para compatibilidade de rollback."
+fi
+
+echo "➡️  Limpando dependências de desenvolvimento (npm prune)..."
+npm prune --omit=dev
 
 echo "➡️  Rodando migrations do banco..."
 ENV_FILE="$ENV_FILE" npm run db:migrate

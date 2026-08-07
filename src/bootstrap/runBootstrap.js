@@ -8,7 +8,7 @@ export async function runBootstrap(options = {}) {
   const buildAppConfigFn = options.buildAppConfigFn ?? defaultBuildAppConfig;
   const importApplicationFn =
     options.importApplicationFn ??
-    (() => import("../app/startApplication.js"));
+    (() => import("../../dist/nest/startApplication.js"));
   const logger = options.logger ?? {
     error: (msg) => console.error(msg),
   };
