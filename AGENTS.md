@@ -1,6 +1,6 @@
 # AGENTS.md — HSC Auth API
 
-**Versão:** 2.1
+**Versão:** 2.2
 **Data:** 2026-08-06
 **Repositório:** `14vosx/hsc-auth-api`
 
@@ -35,14 +35,16 @@ O responsável humano pelo projeto é a autoridade final sobre:
 
 ## 2. Contexto do projeto
 
-O `hsc-auth-api` é a API de autenticação e conteúdo do HSC.
+O `hsc-auth-api` é a API de autenticação, identidade, conteúdo e acesso autenticado do HSC.
 
 Stack principal:
 
 ```text
 Node.js 22
 ES Modules
-Express
+NestJS 11
+TypeScript strict
+@nestjs/platform-express
 MySQL/MariaDB via mysql2
 SQL migrations
 Cookie-based sessions
@@ -57,16 +59,14 @@ Steam Profiles cache
 
 ```text
 index.js
+src/bootstrap
 src/config
-src/db
-src/middlewares
-src/routes
-src/services
-src/utils
+src/nest
 db/migrations
 scripts
 ops
 docs
+test
 ```
 
 Responsabilidades atuais:
@@ -93,36 +93,39 @@ infraestrutura AWS
 configuração Nginx/systemd/DNS/TLS
 ```
 
-### 2.1. Arquitetura-alvo aprovada
+### 2.1. Arquitetura atual aprovada
 
-A arquitetura-alvo do `hsc-auth-api` é:
+A arquitetura atual do `hsc-auth-api` é:
 
 ```text
 NestJS 11
 TypeScript strict
-Express adapter inicialmente
+@nestjs/platform-express
 monólito modular
 MariaDB
 mysql2
-SQL migrations existentes
+SQL migrations executadas por CLI
 contratos HTTP preservados
+um único processo Node.js
+um único listener HTTP
+um único pipeline HTTP
 ```
-
-A adoção será incremental e orientada por Gates específicos.
 
 Regras:
 
-- o runtime Express atual permanece válido até a migração alcançar paridade suficiente;
-- não realizar reescrita big bang;
-- não introduzir microserviços apenas por causa da migração;
-- não trocar simultaneamente banco, driver, migrations e framework;
+- NestJS é o único proprietário da aplicação e do pipeline HTTP;
+- o Express é utilizado somente como adaptador interno de `@nestjs/platform-express`;
+- não montar aplicações HTTP adicionais dentro do NestJS;
+- não introduzir fallback entre frameworks;
+- não dividir rotas entre processos ou listeners;
+- não introduzir microserviços sem decisão arquitetural explícita;
+- não trocar simultaneamente banco, driver, migrations ou adaptador HTTP;
 - não alterar cookies, sessões, rotas, status codes ou payloads como efeito colateral;
-- criar testes de caracterização antes de migrar domínios críticos;
-- migrar Admin Auth, Player Auth e Player Bunker somente com critérios de paridade explícitos;
-- implementar pagamentos e entitlements apenas após a fundação NestJS estar aprovada e suficientemente estável;
-- decisões detalhadas de arquitetura devem ser registradas em ADR ou documento de Gate próprio.
-
-Até que um Gate de migração autorize alterações, tarefas no runtime Express devem corrigir e estabilizar a implementação atual sem antecipar uma refatoração ampla para NestJS.
+- preservar a separação entre Admin Auth, Player Auth e Player Bunker;
+- manter MariaDB/MySQL com `mysql2` e SQL nativo;
+- manter migrations separadas do startup HTTP;
+- não introduzir ORM sem decisão arquitetural explícita;
+- decisões arquiteturais devem ser registradas em ADR ou documento aprovado.
 
 ## 3. Modelo operacional do projeto
 
@@ -196,6 +199,7 @@ Por padrão, o agente deve orientar o humano a executar:
 
 ```text
 npm ci
+npm run build:nest
 npm test completo
 npm run db:migrate
 npm start para validação manual
@@ -309,10 +313,13 @@ O agente deve fornecer os comandos de `commit` e `push`, mas o humano os executa
 Dentro de uma tarefa explícita, o agente pode trabalhar em:
 
 ```text
-Express route handlers
+NestJS controllers
+NestJS modules
+NestJS guards
+NestJS services
+NestJS repositories
 request validation
 response shaping
-service functions
 database access modules
 configuração da aplicação
 bootstrap da aplicação
@@ -421,6 +428,10 @@ Variáveis fornecidas pelo processo devem prevalecer sobre arquivos de ambiente.
 
 Falhas de configuração obrigatória devem interromper o startup com mensagem sanitizada e código de saída diferente de zero.
 
+A configuração validada deve ser disponibilizada aos módulos NestJS por injeção de dependências.
+
+Controllers, guards, services e repositories não devem carregar novamente arquivos `.env` nem criar fontes paralelas de configuração.
+
 ## 10. Fronteiras de autenticação
 
 Admin Auth e Player Auth são conceitos separados.
@@ -430,7 +441,6 @@ Não reutilizar entre eles:
 ```text
 cookies
 guards
-middlewares
 tabelas
 sessões
 RBAC
@@ -438,9 +448,10 @@ semântica de identidade
 semântica de autorização
 ```
 
-Cookie conhecido de Player Auth:
+Cookies conhecidos:
 
 ```text
+hsc_admin_session
 hsc_player_session
 ```
 
@@ -451,7 +462,7 @@ Regras:
 - não imprimir hashes;
 - não registrar query strings sensíveis do callback Steam;
 - não expor detalhes internos de armazenamento de sessão;
-- não misturar middleware de Admin Auth e Player Auth.
+- não misturar guards, cookies ou sessões de Admin Auth e Player Auth.
 
 Mudanças em autenticação, cookies, sessão, Steam identity ou RBAC exigem aprovação humana explícita.
 
@@ -548,6 +559,8 @@ Adições retrocompatíveis também devem ser destacadas para revisão.
 
 Se uma implementação exigir decisão de contrato, o agente deve parar antes de alterar o código.
 
+Controllers devem permanecer responsáveis pela tradução do transporte HTTP e não devem ocultar alterações contratuais dentro de services ou repositories.
+
 ## 14. Banco de dados e migrations
 
 Mudanças de banco devem ser deliberadas e revisáveis.
@@ -560,12 +573,16 @@ Regras:
 - não executar migration de produção;
 - não mudar semântica de identidade ou sessão sem aprovação;
 - documentar a razão da migration;
-- preservar compatibilidade quando possível.
+- preservar compatibilidade quando possível;
+- manter migrations separadas do startup da aplicação HTTP;
+- não executar migrations automaticamente por lifecycle hook do NestJS;
+- não habilitar `multipleStatements` nas conexões de runtime;
+- não introduzir ORM sem decisão arquitetural explícita.
 
 Validação de migration deve ocorrer apenas em ambiente local/dev e, por padrão, ser executada pelo humano:
 
 ```bash
-npm run db:migrate
+ENV_FILE=.env.local npm run db:migrate
 ```
 
 ## 15. Dependências
@@ -576,6 +593,7 @@ Não executar automaticamente:
 
 ```text
 npm audit fix
+npm audit fix --force
 npm update
 npm install <nova-dependencia>
 npm install -g
@@ -606,21 +624,31 @@ A validação deve ser proporcional à mudança.
 Ordem preferencial:
 
 1. inspeção estática direcionada;
-2. teste unitário direcionado;
-3. teste de integração local direcionado;
-4. smoke local relevante;
-5. suíte completa, apenas quando necessária;
-6. validação manual da aplicação, apenas quando necessária.
+2. build TypeScript, quando a alteração afetar código NestJS;
+3. teste unitário direcionado;
+4. teste de integração local direcionado;
+5. smoke local relevante;
+6. suíte completa, apenas quando necessária;
+7. validação manual da aplicação, apenas quando necessária.
 
-Não executar repetidamente a suíte completa durante a implementação.
+Não executar repetidamente build, suíte completa, servidor ou smoke durante a implementação.
+
+Quando um build ou teste falhar:
+
+- não repetir automaticamente;
+- identificar a causa;
+- realizar uma correção determinística;
+- executar novamente apenas a validação necessária;
+- parar e relatar quando a causa não estiver clara.
 
 Exemplos de comandos que podem ser fornecidos ao humano:
 
 ```bash
+npm run build:nest
 node --test caminho/do/teste.test.js
 npm test
-npm run db:migrate
-npm start
+ENV_FILE=.env.local npm run db:migrate
+ENV_FILE=.env.local npm start
 ops/smoke-local.sh
 ops/smoke-baseline.sh
 ```
@@ -645,7 +673,9 @@ Ao alterar comportamento:
 - documentar configuração por nomes, nunca por valores reais;
 - não transformar documentação em log de implementação;
 - manter documentação orientada ao comportamento atual;
-- evitar duplicação desnecessária.
+- evitar duplicação desnecessária;
+- manter README, AGENTS e documentos operacionais alinhados ao runtime atual;
+- registrar decisões arquiteturais em ADR, não no README.
 
 ## 19. Estilo de implementação
 
@@ -654,8 +684,11 @@ Preferir:
 - mudanças pequenas;
 - diffs focados;
 - funções explícitas;
-- handlers finos;
-- serviços reutilizáveis quando já houver repetição;
+- controllers finos;
+- services responsáveis por regras de aplicação;
+- repositories responsáveis por persistência;
+- módulos com fronteiras claras;
+- injeção de dependências explícita;
 - validação centralizada;
 - nomes claros;
 - compatibilidade retroativa;
@@ -672,7 +705,13 @@ Evitar:
 - formatação massiva;
 - renomeações sem necessidade;
 - mistura de múltiplos objetivos no mesmo diff;
-- mudanças de contrato escondidas.
+- mudanças de contrato escondidas;
+- services que dependam diretamente de objetos HTTP;
+- repositories que decidam status codes ou response shapes;
+- módulos globais sem necessidade;
+- service locator;
+- fontes paralelas de configuração;
+- acesso disperso a `process.env`.
 
 ## 20. Relatório obrigatório do agente
 
