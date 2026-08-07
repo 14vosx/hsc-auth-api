@@ -5,8 +5,10 @@
   "scripts": {
     "start": "node index.js",
     "db:migrate": "node scripts/migrate.js",
-    "test": "node --test",
-    "build:nest": "tsc -p tsconfig.nest.json"
+    "test": "npm run test:legacy && npm run test:nest",
+    "build:nest": "tsc -p tsconfig.nest.json",
+    "test:legacy": "node --test $(find test -type f -name '*.test.js' -print | sort)",
+    "test:nest": "rm -rf dist-test && tsc -p tsconfig.test.json && node --test $(find dist-test/test/nest -type f -name '*.test.js' -print | sort)"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",

@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { DatabaseService } from "../../database/database.service.js";
+import { createPlayerSessionTokenMaterial } from "./player-session-token.js";
 
 export interface PlayerSession {
   sessionId: string;
@@ -90,9 +91,11 @@ export class PlayerSessionRepository {
     playerAccountId: string,
     ttlHours: number,
   ): Promise<CreatedPlayerSession> {
-    const rawToken = randomUUID();
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    const sessionId = randomUUID();
+    const {
+      sessionId,
+      rawToken,
+      tokenHash,
+    } = createPlayerSessionTokenMaterial();
     const pool = this.databaseService.getPool();
 
     await pool.execute<ResultSetHeader>(

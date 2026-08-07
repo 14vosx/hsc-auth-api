@@ -3,6 +3,13 @@ export interface AppConfig {
     readonly port: number;
     readonly publicUrl: string;
   };
+  readonly mailTransport: {
+    readonly host: string;
+    readonly port: number;
+    readonly secure: boolean;
+    readonly user: string;
+    readonly pass: string;
+  };
   readonly cors: {
     readonly allowedOrigin: string;
     readonly allowedOrigins: readonly string[];
@@ -34,15 +41,17 @@ export interface AppConfig {
     readonly magicLinkCallbackPath: string;
     readonly magicLinkFromEmail: string;
     readonly magicLinkSubject: string;
-    readonly smtpHost: string;
-    readonly smtpPort: number;
-    readonly smtpSecure: boolean;
-    readonly smtpUser: string;
-    readonly smtpPass: string;
   };
   readonly playerAuth: {
     readonly cookieName: string;
     readonly ttlHours: number;
+  };
+  readonly playerEmailAuth: {
+    readonly enabled: boolean;
+    readonly verificationTtlMinutes: number;
+    readonly verificationUrl: string;
+    readonly fromEmail: string;
+    readonly verificationSubject: string;
   };
   readonly playerSteamAuth: {
     readonly enabled: boolean;

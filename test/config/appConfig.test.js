@@ -254,3 +254,43 @@ test("buildAppConfig - mensagem sanitizada", () => {
     assert.ok(!err.message.includes(secretValue));
   }
 });
+
+test("buildAppConfig - Player Email Auth desabilitado permite SMTP vazio", () => {
+  const config = buildAppConfig({});
+
+  assert.equal(config.playerEmailAuth.enabled, false);
+  assert.equal(
+    config.playerEmailAuth.verificationTtlMinutes,
+    30,
+  );
+  assert.equal(config.mailTransport.host, "");
+});
+
+test("buildAppConfig - Player Email Auth habilitado exige SMTP", () => {
+  assert.throws(
+    () =>
+      buildAppConfig({
+        PLAYER_EMAIL_AUTH_ENABLED: "true",
+      }),
+    (err) =>
+      err instanceof ConfigError &&
+      err.key === "SMTP_HOST",
+  );
+});
+
+test("buildAppConfig - Player Email Auth habilitado aceita transporte SMTP compartilhado", () => {
+  const config = buildAppConfig({
+    PLAYER_EMAIL_AUTH_ENABLED: "true",
+    SMTP_HOST: "smtp.example.com",
+    SMTP_USER: "hsc",
+    SMTP_PASS: "secret",
+    SMTP_PORT: "465",
+    SMTP_SECURE: "true",
+  });
+
+  assert.equal(config.playerEmailAuth.enabled, true);
+  assert.equal(config.mailTransport.host, "smtp.example.com");
+  assert.equal(config.mailTransport.port, 465);
+  assert.equal(config.mailTransport.secure, true);
+  assert.equal(config.mailTransport.user, "hsc");
+});

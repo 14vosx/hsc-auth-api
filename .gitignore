@@ -21,3 +21,5 @@ var/uploads/
 var/uploads/*
 
 /dist/
+
+dist-test/

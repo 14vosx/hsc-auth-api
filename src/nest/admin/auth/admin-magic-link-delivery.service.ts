@@ -41,11 +41,12 @@ export class AdminMagicLinkDeliveryService {
     expiresAt: string;
   }): Promise<void> {
     const authConfig = this.config.adminAuth;
+    const mailTransport = this.config.mailTransport;
 
-    const host = authConfig.smtpHost;
-    const port = authConfig.smtpPort;
-    const user = authConfig.smtpUser;
-    const pass = authConfig.smtpPass;
+    const host = mailTransport.host;
+    const port = mailTransport.port;
+    const user = mailTransport.user;
+    const pass = mailTransport.pass;
     const fromEmail = authConfig.magicLinkFromEmail;
 
     if (!host) throw new Error("smtp_host_missing");
@@ -57,7 +58,7 @@ export class AdminMagicLinkDeliveryService {
     const transporter = nodemailer.createTransport({
       host,
       port,
-      secure: authConfig.smtpSecure,
+      secure: mailTransport.secure,
       auth: {
         user,
         pass,

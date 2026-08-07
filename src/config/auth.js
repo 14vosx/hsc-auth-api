@@ -2,7 +2,6 @@
 import {
   parseString,
   parsePositiveInt,
-  parsePort,
   parseBoolean,
   parseAbsoluteUrl,
   parseHttpPath,
@@ -56,10 +55,5 @@ export function buildAuthConfig(env = process.env, runtimeConfig = {}) {
       env.MAGIC_LINK_SUBJECT,
       "Your HSC Backoffice sign-in link",
     ),
-    smtpHost: parseString(env.SMTP_HOST, ""),
-    smtpPort: parsePort(env.SMTP_PORT, 465, "SMTP_PORT"),
-    smtpSecure: parseBoolean(env.SMTP_SECURE, false, "SMTP_SECURE"),
-    smtpUser: parseString(env.SMTP_USER, ""),
-    smtpPass: parseString(env.SMTP_PASS, ""),
   };
 }

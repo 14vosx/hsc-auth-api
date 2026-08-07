@@ -2,6 +2,8 @@
 import { parsePort, parseAbsoluteUrl } from "./helpers.js";
 import { buildAuthConfig } from "./auth.js";
 import { buildPlayerAuthConfig } from "./playerAuth.js";
+import { buildMailTransportConfig } from "./mailTransport.js";
+import { buildPlayerEmailAuthConfig } from "./playerEmailAuth.js";
 import { buildPlayerSteamAuthConfig } from "./playerSteamAuth.js";
 import { buildPlayerBunkerConfig } from "./playerBunker.js";
 import { buildCorsConfig } from "./cors.js";
@@ -25,8 +27,13 @@ export function buildRuntimeConfig(env = process.env) {
 
 export function buildAppConfig(env = process.env) {
   const runtime = buildRuntimeConfig(env);
+  const mailTransport = buildMailTransportConfig(env);
   const adminAuth = buildAuthConfig(env, runtime);
   const playerAuth = buildPlayerAuthConfig(env);
+  const playerEmailAuth = buildPlayerEmailAuthConfig(
+    env,
+    mailTransport,
+  );
   const playerSteamAuth = buildPlayerSteamAuthConfig(env, adminAuth);
   const playerBunker = buildPlayerBunkerConfig(env);
   const cors = buildCorsConfig(env);
@@ -36,8 +43,10 @@ export function buildAppConfig(env = process.env) {
 
   return Object.freeze({
     runtime,
+    mailTransport,
     adminAuth,
     playerAuth,
+    playerEmailAuth,
     playerSteamAuth,
     playerBunker,
     cors,
