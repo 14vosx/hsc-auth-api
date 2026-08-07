@@ -8,7 +8,8 @@
     "test": "npm run test:legacy && npm run test:nest",
     "build:nest": "tsc -p tsconfig.nest.json",
     "test:legacy": "node --test $(find test -type f -name '*.test.js' -print | sort)",
-    "test:nest": "rm -rf dist-test && tsc -p tsconfig.test.json && node --test $(find dist-test/test/nest -type f -name '*.test.js' -print | sort)"
+    "test:nest": "rm -rf dist-test && tsc -p tsconfig.test.json && node --test $(find dist-test/test/nest -type f -name '*.test.js' -print | sort)",
+    "smoke:local": "npm run build:nest && node scripts/smoke-local.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",

@@ -22,7 +22,9 @@ STEAM_PROFILE_CACHE_TTL_SECONDS=86400
 STEAM_API_TIMEOUT_SECONDS=8
 ```
 
-`STEAM_API_KEY` e segredo e nunca deve ser logada, exposta em respostas HTTP ou copiada para documentacao. `INTERNAL_API_KEY` protege os endpoints internos; se ela nao estiver configurada, a rota interna retorna `503` de forma segura.
+`STEAM_API_KEY` e segredo e nunca deve ser logada, exposta em respostas HTTP ou copiada para documentacao. `INTERNAL_API_KEY` protege o contrato interno de Steam Profiles; se ela nao estiver configurada, a rota interna retorna `503` de forma segura.
+
+`INTERNAL_API_KEY` nao e a credencial de Server Access. O contrato `/internal/server-access/authorize` utiliza `SERVER_ACCESS_INTERNAL_API_KEY`, com escopo separado.
 
 ## Endpoint Interno
 
@@ -80,9 +82,11 @@ Status esperados:
 Pre-condicoes:
 
 ```bash
-ENV_FILE=.env.local.example npm run db:migrate
-PORT=3010 ENV_FILE=.env.local.example npm start
+ENV_FILE=.env.local npm run db:migrate
+PORT=3010 ENV_FILE=.env.local npm start
 ```
+
+O arquivo `.env.local.example` e apenas referencia segura de nomes/defaults e nao deve ser tratado como ambiente executavel canonico.
 
 Para testar resposta `200` com autenticacao interna, configure `INTERNAL_API_KEY`
 em um ambiente local seguro. Para buscar dados externos da Steam, configure tambem

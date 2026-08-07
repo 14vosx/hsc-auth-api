@@ -163,13 +163,16 @@ Categorias atuais:
 
 ```text
 runtime
+mailTransport
 adminAuth
 playerAuth
+playerEmailAuth
 playerSteamAuth
 playerBunker
 cors
 db
 steamProfiles
+serverAccess
 uploads
 ```
 
@@ -178,13 +181,16 @@ Estrutura conceitual:
 ```text
 AppConfig
 ├── runtime
+├── mailTransport
 ├── adminAuth
 ├── playerAuth
+├── playerEmailAuth
 ├── playerSteamAuth
 ├── playerBunker
 ├── cors
 ├── db
 ├── steamProfiles
+├── serverAccess
 └── uploads
 ```
 
@@ -402,6 +408,9 @@ Exemplos:
 ADMIN_SESSION_TTL_HOURS
 MAGIC_LINK_TTL_MINUTES
 PLAYER_SESSION_TTL_HOURS
+PLAYER_EMAIL_VERIFICATION_TTL_MINUTES
+PLAYER_EMAIL_PASSWORD_RESET_TTL_MINUTES
+PLAYER_EMAIL_LINK_TTL_MINUTES
 ```
 
 ### Timeouts
@@ -470,6 +479,9 @@ Exemplos:
 ```text
 PLAYER_AUTH_SUCCESS_REDIRECT_URL
 PLAYER_AUTH_FAILURE_REDIRECT_URL
+PLAYER_EMAIL_VERIFICATION_URL
+PLAYER_EMAIL_PASSWORD_RESET_URL
+PLAYER_EMAIL_LINK_URL
 ```
 
 ## Falhas de configuração
@@ -586,11 +598,14 @@ npm ci
 cp .env.local.example .env.local
 ```
 
-Banco:
+Banco local:
 
 ```bash
+docker compose up -d mariadb
 ENV_FILE=.env.local npm run db:migrate
 ```
+
+Quando Docker Desktop for utilizado no Windows/WSL, a integração com a distro WSL deve estar habilitada. Não é necessário instalar um segundo Docker Engine dentro da distro.
 
 Build:
 
@@ -640,9 +655,16 @@ Para mudanças em código NestJS ou bootstrap:
 ```bash
 npm run build:nest
 npm test
+ENV_FILE=.env.local npm run smoke:local
 git diff --check
 git diff --stat
 git status --short
+```
+
+O smoke local canônico está documentado em:
+
+```text
+docs/local-smoke.md
 ```
 
 Para mudanças exclusivamente documentais:

@@ -218,15 +218,27 @@ Não registrar o cookie real usado na validação.
 
 ## Smoke Local
 
-Smoke local relacionado:
+O smoke local canônico da Auth API é:
 
-```text
-ops/player-bunker-artifact-summary-smoke.sh
+```bash
+ENV_FILE=.env.local npm run smoke:local
 ```
 
-Esse smoke deve ser usado apenas contra ambiente local/dev. Ele valida o caminho
-artifact-backed de `GET /player/bunker/summary` usando fixtures locais e
-placeholders seguros.
+Referência:
+
+```text
+docs/local-smoke.md
+```
+
+O smoke mínimo valida que `GET /player/bunker/summary` permanece protegido por
+Player Auth quando não existe sessão válida.
+
+O antigo smoke shell específico de artifact não faz mais parte da superfície
+operacional ativa do repositório.
+
+Cenários positivos de artifact, fallbacks, sanitização e alinhamento de Season
+devem permanecer cobertos pelos testes automatizados direcionados e por
+validação controlada quando a integração ETL/Portal exigir.
 
 ## Limitações
 
