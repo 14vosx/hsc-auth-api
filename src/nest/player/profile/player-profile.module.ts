@@ -11,6 +11,15 @@ import {
 import {
   PlayerProfileService,
 } from "./player-profile.service.js";
+import {
+  PlayerPublicProfileController,
+} from "./player-public-profile.controller.js";
+import {
+  PlayerPublicProfileRepository,
+} from "./player-public-profile.repository.js";
+import {
+  PlayerPublicProfileService,
+} from "./player-public-profile.service.js";
 
 @Module({
   imports: [
@@ -18,10 +27,13 @@ import {
   ],
   controllers: [
     PlayerProfileController,
+    PlayerPublicProfileController,
   ],
   providers: [
     PlayerProfileRepository,
     PlayerProfileService,
+    PlayerPublicProfileRepository,
+    PlayerPublicProfileService,
   ],
 })
 export class PlayerProfileModule {}

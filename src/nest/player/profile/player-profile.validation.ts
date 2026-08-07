@@ -1,4 +1,7 @@
 import {
+  isTechnicalPlayerProfileSlug,
+} from "./player-profile.defaults.js";
+import {
   isPlayerProfilePreferredMap,
   isPlayerProfilePreferredRole,
   isPlayerProfileVisibility,
@@ -265,7 +268,7 @@ export function validatePlayerProfilePatch(
 
     if (
       PLAYER_PROFILE_RESERVED_SLUGS.has(slug) ||
-      /^player-[0-9a-f]{32}$/.test(slug)
+      isTechnicalPlayerProfileSlug(slug)
     ) {
       return {
         ok: false,
