@@ -59,6 +59,10 @@ fi
 echo "➡️  Instalando dependências (npm ci)..."
 npm ci
 
+# Compilar NestJS
+echo "➡️  Compilando runtime NestJS (npm run build:nest)..."
+npm run build:nest
+
 # Iniciar API local
 echo "➡️  Subindo API local..."
 # Passa ENV_FILE para o Node ler o env correto (seu index.js deve usar process.env.ENV_FILE)

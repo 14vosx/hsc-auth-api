@@ -89,6 +89,9 @@ fi
 echo "➡️  Instalando dependências Node (npm ci)..."
 npm ci
 
+echo "➡️  Compilando runtime NestJS (npm run build:nest)..."
+npm run build:nest
+
 echo "➡️  Iniciando API (ENV_FILE=$ENV_FILE)..."
 
 # sobe a API com env já carregado
