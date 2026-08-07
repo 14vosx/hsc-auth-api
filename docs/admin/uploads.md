@@ -4,7 +4,7 @@
 
 Este documento registra o contrato local do endpoint administrativo de upload do `hsc-auth-api`.
 
-O endpoint permite que o Backoffice Admin envie imagens e receba uma URL pública pronta para persistir em entidades de domínio, como `news.image_url` e, futuramente, `seasons.cover_image_url`.
+O endpoint permite que o Backoffice Admin envie imagens e receba uma URL pública pronta para persistir em entidades de domínio, como `news.image_url` e `seasons.cover_image_url`.
 
 O endpoint não altera News ou Seasons diretamente. Ele apenas salva o arquivo validado, registra auditoria administrativa e retorna a URL pública.
 
@@ -86,7 +86,7 @@ Campos:
 
 ## Mitigações aplicadas
 
-* endpoint protegido por `requireAdmin`;
+* endpoint protegido por `AdminAuthGuard`;
 * `db_ready` exigido antes da mutação;
 * auditoria administrativa com `action = upload.create`;
 * limite de tamanho via Multer;

@@ -1,7 +1,7 @@
 # AGENTS.md — HSC Auth API
 
-**Versão:** 2.2
-**Data:** 2026-08-06
+**Versão:** 2.3
+**Data:** 2026-08-07
 **Repositório:** `14vosx/hsc-auth-api`
 
 ## 1. Finalidade e autoridade
@@ -49,10 +49,12 @@ MySQL/MariaDB via mysql2
 SQL migrations
 Cookie-based sessions
 Magic link authentication for Admin Auth
-Steam-first Player Auth
+Email + Steam Player Auth
+Player account/profile/membership APIs
 Admin/content APIs
 Player-facing Bunker APIs
 Steam Profiles cache
+Internal Server Access authorization
 ```
 
 Áreas relevantes:
@@ -76,8 +78,11 @@ Admin Auth
 Admin/content APIs
 News/Seasons content APIs
 Steam Profiles cache
-Player Auth
+Player Auth por e-mail e Steam
+Player Account / Profile / Membership
+Admin Player Accounts / Membership lifecycle
 Player Bunker authenticated gateway
+Internal Server Access authorization
 Uploads controlados pela Auth API
 ```
 
@@ -121,7 +126,7 @@ Regras:
 - não introduzir microserviços sem decisão arquitetural explícita;
 - não trocar simultaneamente banco, driver, migrations ou adaptador HTTP;
 - não alterar cookies, sessões, rotas, status codes ou payloads como efeito colateral;
-- preservar a separação entre Admin Auth, Player Auth e Player Bunker;
+- preservar a separação entre Admin Auth, Player Auth, Account/Profile/Membership e Player Bunker;
 - manter MariaDB/MySQL com `mysql2` e SQL nativo;
 - manter migrations separadas do startup HTTP;
 - não introduzir ORM sem decisão arquitetural explícita;
@@ -466,6 +471,63 @@ Regras:
 
 Mudanças em autenticação, cookies, sessão, Steam identity ou RBAC exigem aprovação humana explícita.
 
+### 10.1. Modelo de domínio player
+
+Manter como invariante:
+
+```text
+Account ≠ auth method ≠ profile ≠ membership
+```
+
+Regras:
+
+- conta HSC pode existir com autenticação por e-mail sem Steam vinculada;
+- Steam pode ser vinculada posteriormente somente após prova de posse via Steam OpenID;
+- nunca aceitar SteamID64 manual como identidade verificada;
+- profile é uma representação da conta e possui política própria de visibilidade;
+- membership é estado próprio da conta e não deve ser inferido de login, Steam ou profile;
+- capacidades de CS2 podem exigir Steam vinculada/verificada;
+- acesso ao servidor exige conta ativa, Steam vinculada/verificada e membership efetivo ativo;
+- desabilitar conta invalida a capacidade de autenticar com sessões existentes;
+- Backoffice deve consumir APIs administrativas da Auth API e nunca acessar diretamente o banco.
+
+Profile com visibilidade `public` significa visível para usuários HSC autenticados. Não significa perfil público de Internet.
+
+### 10.2. Hardening de identidade
+
+Preservar os controles aprovados:
+
+```text
+Origin-based CSRF protection
+scoped rate limiting
+Steam login browser-bound state
+hashed session/token storage
+disabled-account enforcement
+sanitized authentication errors
+```
+
+Mutações player autenticadas por cookie devem manter `PlayerCsrfGuard` quando aplicável.
+
+Fluxos públicos sensíveis devem manter rate limiting apropriado sem registrar e-mail, player ID, token ou segredo em plaintext no tracker.
+
+Login Steam deve manter correlação do callback com o navegador que iniciou o fluxo por state criptográfico temporário e comparação timing-safe.
+
+### 10.3. Credenciais internas
+
+As credenciais internas possuem escopos distintos:
+
+```text
+INTERNAL_API_KEY
+→ Steam Profiles / integrações legadas autorizadas
+
+SERVER_ACCESS_INTERNAL_API_KEY
+→ decisão interna de Server Access
+```
+
+Não reutilizar uma como substituta da outra.
+
+Server Access deve permanecer fail-closed.
+
 ## 11. Fronteira do Player Bunker
 
 A Auth API é o gateway autenticado do Player Bunker.
@@ -587,7 +649,17 @@ ENV_FILE=.env.local npm run db:migrate
 
 ## 15. Dependências
 
-Não adicionar, remover ou atualizar dependências sem aprovação explícita.
+Dependências podem ser adicionadas ou atualizadas quando houver justificativa técnica clara e aderência ao escopo aprovado.
+
+Critérios:
+
+- preferir pacote mantido e versão atual compatível com o stack;
+- justificar a dependência em vez de reimplementar infraestrutura consolidada sem necessidade;
+- revisar impacto de runtime, segurança, licença e lockfile;
+- evitar dependência quando a plataforma ou o stack já oferecem solução adequada;
+- não realizar atualização ampla de dependências como efeito colateral;
+- alteração de major version exige decisão explícita;
+- mudanças relevantes em dependências devem aparecer claramente no diff.
 
 Não executar automaticamente:
 
@@ -595,19 +667,22 @@ Não executar automaticamente:
 npm audit fix
 npm audit fix --force
 npm update
-npm install <nova-dependencia>
 npm install -g
-alteração de major version
 regeneração desnecessária de package-lock.json
 ```
 
-Vulnerabilidades encontradas devem ser registradas separadamente, sem misturar sua correção com uma tarefa não relacionada.
+Vulnerabilidades encontradas devem ser registradas separadamente, salvo quando a tarefa aprovada for especificamente corrigir a dependência.
 
 ## 16. Docker e banco local
 
+O ambiente local canônico usa Docker Desktop no Windows com integração WSL habilitada para `Ubuntu-24.04`.
+
+Não instalar Docker Engine separadamente dentro do WSL quando Docker Desktop já estiver integrado.
+
 Antes de usar Docker:
 
-1. inspecionar `docker-compose.yml`;
+1. confirmar que `docker version` funciona dentro do WSL;
+2. inspecionar `docker-compose.yml`;
 2. confirmar portas, volumes e variáveis;
 3. confirmar que todos os destinos são locais;
 4. explicar o plano;
@@ -649,8 +724,7 @@ node --test caminho/do/teste.test.js
 npm test
 ENV_FILE=.env.local npm run db:migrate
 ENV_FILE=.env.local npm start
-ops/smoke-local.sh
-ops/smoke-baseline.sh
+ENV_FILE=.env.local npm run smoke:local
 ```
 
 Não usar scripts de deploy ou release como validação.
@@ -675,6 +749,9 @@ Ao alterar comportamento:
 - manter documentação orientada ao comportamento atual;
 - evitar duplicação desnecessária;
 - manter README, AGENTS e documentos operacionais alinhados ao runtime atual;
+- usar `docs/local-smoke.md` como referência do smoke local canônico;
+- remover documentação operacional obsoleta quando ela descreve contratos que não existem mais;
+- preservar histórico de implementação pelo Git em vez de manter checkpoints obsoletos como documentação ativa;
 - registrar decisões arquiteturais em ADR, não no README.
 
 ## 19. Estilo de implementação

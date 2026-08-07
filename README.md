@@ -11,11 +11,14 @@ O `hsc-auth-api` é responsável por:
 - autenticação administrativa por Magic Link;
 - sessões administrativas por cookie;
 - autorização administrativa;
-- autenticação de jogadores via Steam OpenID;
+- autenticação de jogadores por e-mail e Steam OpenID;
+- verificação de e-mail, login, recuperação de senha e linking de identidades;
 - sessões de jogadores por cookie;
-- resolução da identidade Steam;
+- resolução de identidade Steam verificada;
+- conta HSC player-facing, profile e membership;
 - gateway autenticado do Player Bunker;
-- APIs administrativas de usuários, notícias e Seasons;
+- APIs administrativas de usuários, notícias, Seasons, player accounts e memberships;
+- decisão interna de Server Access baseada em conta, identidade Steam e membership;
 - APIs públicas de notícias e Seasons;
 - uploads administrativos protegidos;
 - publicação controlada de arquivos estáticos;
@@ -96,11 +99,17 @@ AdminUsersModule
 AdminNewsModule
 AdminUploadsModule
 AdminSeasonsModule
+AdminMembershipModule
+AdminPlayerAccountsModule
 
 PlayerAuthModule
+PlayerAccountModule
+PlayerProfileModule
+PlayerMembershipModule
 PlayerBunkerModule
 
 InternalSteamProfilesModule
+ServerAccessModule
 ```
 
 ### Core e banco de dados
@@ -121,16 +130,22 @@ InternalSteamProfilesModule
 * `AdminUsersModule`: gerenciamento administrativo de usuários;
 * `AdminNewsModule`: gerenciamento administrativo de notícias;
 * `AdminUploadsModule`: upload protegido e publicação controlada de arquivos;
-* `AdminSeasonsModule`: gerenciamento do ciclo de vida das Seasons.
+* `AdminSeasonsModule`: gerenciamento do ciclo de vida das Seasons;
+* `AdminMembershipModule`: gerenciamento administrativo do lifecycle de memberships;
+* `AdminPlayerAccountsModule`: leitura e ativação/desativação administrativa de contas player.
 
 ### Jogadores
 
-* `PlayerAuthModule`: autenticação Steam, sessão, identidade e logout;
+* `PlayerAuthModule`: registration, verification, login, password reset, linking de e-mail/Steam, sessão e logout;
+* `PlayerAccountModule`: resumo autenticado de conta e capacidades de identidade;
+* `PlayerProfileModule`: profile próprio, visibilidade member-visible e mídia de avatar/banner;
+* `PlayerMembershipModule`: leitura autenticada do membership efetivo da própria conta;
 * `PlayerBunkerModule`: gateway autenticado e defensivo para dados competitivos materializados pelo ETL.
 
 ### Serviços internos
 
-* `InternalSteamProfilesModule`: resolução e cache de perfis Steam para integrações autorizadas.
+* `InternalSteamProfilesModule`: resolução e cache de perfis Steam para integrações autorizadas;
+* `ServerAccessModule`: decisão fail-closed de acesso ao servidor a partir de SteamID64, conta ativa e membership efetivo.
 
 ## Estrutura principal
 
@@ -287,6 +302,7 @@ npm run build:nest
 npm run db:migrate
 npm start
 npm test
+ENV_FILE=.env.local npm run smoke:local
 ```
 
 ## Migrations
@@ -334,11 +350,14 @@ GET  /health
 /content/seasons/*
 
 /player/auth/*
-/player/me
-/player/logout
+/player/account
+/player/profile/*
+/player/membership
 /player/bunker/*
+/players/:slug
 
-/internal/*
+/internal/steam/*
+/internal/server-access/*
 ```
 
 O README não define o contrato completo de cada endpoint.
@@ -367,6 +386,74 @@ hsc_player_session
 ```
 
 Tokens, cookies, hashes de sessão, chaves administrativas e credenciais nunca devem ser impressos em logs, README, issues ou pull requests.
+
+## Conta, identidade, profile e membership
+
+O domínio player-facing mantém conceitos separados:
+
+```text
+Account ≠ auth method ≠ profile ≠ membership
+```
+
+Uma conta HSC pode autenticar por e-mail e posteriormente vincular Steam.
+
+O SteamID64 nunca é aceito como identidade manualmente declarada. A posse da identidade Steam é comprovada pelo fluxo Steam OpenID antes do vínculo.
+
+Capacidades dependentes de CS2 exigem identidade Steam vinculada/verificada.
+
+Membership é um estado próprio da conta e não é sinônimo de método de autenticação ou profile.
+
+Contratos principais:
+
+```text
+GET   /player/account
+GET   /player/profile/me
+PATCH /player/profile/me
+GET   /players/:slug
+GET   /player/membership
+```
+
+Administração relacionada:
+
+```text
+GET   /admin/player-accounts
+GET   /admin/player-accounts/:id
+PATCH /admin/player-accounts/:id
+
+POST /admin/memberships
+GET  /admin/memberships/:id
+GET  /admin/memberships/by-player/:playerAccountId
+POST /admin/memberships/:id/activate
+POST /admin/memberships/:id/suspend
+POST /admin/memberships/:id/reactivate
+POST /admin/memberships/:id/cancel
+```
+
+O profile com visibilidade `public` é member-visible: pode ser lido por qualquer usuário HSC autenticado. Ele não é público para a Internet.
+
+## Server Access
+
+A decisão interna de acesso ao servidor segue:
+
+```text
+SteamID64
+→ identidade Steam vinculada?
+→ player account ativa?
+→ membership efetivo ativo?
+→ authorized = true
+```
+
+Qualquer condição ausente ou inválida falha de forma fechada.
+
+Contrato:
+
+```text
+POST /internal/server-access/authorize
+```
+
+Esse contrato utiliza credencial própria, separada da integração de Steam Profiles.
+
+A Auth API decide elegibilidade; integração futura com plugin/servidor CS2 permanece fora deste repositório.
 
 ## Player Bunker
 
@@ -494,6 +581,10 @@ Não utilize scripts de deploy ou release como validação local.
 * nunca registrar segredos em logs;
 * nunca expor cookies ou tokens;
 * nunca imprimir credenciais de banco;
+* proteger mutações player baseadas em cookie com a política CSRF definida pelo domínio;
+* preservar rate limiting dos fluxos de autenticação e identidade;
+* preservar state browser-bound no login Steam OpenID;
+* manter credenciais internas de Steam Profiles e Server Access separadas;
 * nunca alterar contratos de autenticação como efeito colateral;
 * nunca executar migrations de produção sem aprovação explícita;
 * nunca executar deploy, release ou rollback sem aprovação explícita;
@@ -514,10 +605,12 @@ Banco de dados:
 
 * `docs/db-migrations-policy.md`
 
-Funcionalidades:
+Funcionalidades e operação local:
 
 * `docs/admin/uploads.md`
 * `docs/steam-profiles.md`
+* `docs/local-smoke.md`
+* `docs/player-bunker-artifact-env-runbook.md`
 
 Governança operacional:
 

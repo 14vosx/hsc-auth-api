@@ -29,7 +29,7 @@ O fluxo de deploy executa migrations explicitamente antes de reiniciar a aplica�
 
 - O runner de migrations (`scripts/migrationRunner.js`) cria uma conexão **dedicada** para a execução de migrations com a propriedade `multipleStatements: true`.
 - Esta configuração é **restrita exclusivamente ao runner** de migrations.
-- O pool e conexões de runtime da aplicação (`src/config/db.js` e `src/app/context.js`) permanecem **sem** `multipleStatements: true` para mitigar riscos de SQL Injection no runtime da API.
+- A configuração e o pool de runtime (`src/config/db.js` e `src/nest/database/database.service.ts`) permanecem **sem** `multipleStatements: true` para mitigar riscos de SQL Injection no runtime da API.
 
 ### Advisory Lock para Concorrência
 
@@ -86,3 +86,13 @@ Após a execução inicial, uma segunda execução do comando deve retornar obri
 ```text
 ✅ No pending migrations.
 ```
+
+Para o ambiente local atual, o MariaDB é exposto pelo compose em `127.0.0.1:3307`.
+
+O smoke local não executa migrations automaticamente. Depois de alinhar o schema local, a validação operacional canônica pode ser executada com:
+
+```bash
+ENV_FILE=.env.local npm run smoke:local
+```
+
+Aplicar migrations em ambiente local não implica aplicação em produção. O estado de produção deve ser verificado e aprovado separadamente.
