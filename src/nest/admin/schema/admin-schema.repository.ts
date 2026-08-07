@@ -9,7 +9,7 @@ export interface SchemaMetaResult {
 }
 
 interface SchemaVersionRow extends RowDataPacket {
-  version: string;
+  filename: string;
 }
 
 interface TableNameRow extends RowDataPacket {
@@ -27,7 +27,12 @@ export class AdminSchemaRepository {
     const pool = this.databaseService.getPool();
 
     const [versionRows] = await pool.execute<SchemaVersionRow[]>(
-      `SELECT version FROM schema_meta LIMIT 1`,
+      `
+        SELECT filename
+        FROM schema_migrations
+        ORDER BY filename DESC
+        LIMIT 1
+      `,
     );
 
     const dbName = this.config.db.connection.database;
@@ -45,7 +50,7 @@ export class AdminSchemaRepository {
     );
 
     return {
-      version: versionRows[0]?.version ?? null,
+      version: versionRows[0]?.filename ?? null,
       tables: tableRows.map((row) => row.TABLE_NAME),
     };
   }
