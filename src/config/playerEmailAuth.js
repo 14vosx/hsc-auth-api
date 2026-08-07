@@ -51,6 +51,20 @@ export function buildPlayerEmailAuthConfig(
       env.PLAYER_EMAIL_PASSWORD_RESET_SUBJECT,
       "Reset your HSC password",
     ),
+    linkTtlMinutes: parsePositiveInt(
+      env.PLAYER_EMAIL_LINK_TTL_MINUTES,
+      30,
+      "PLAYER_EMAIL_LINK_TTL_MINUTES",
+    ),
+    linkUrl: parseRedirectUrl(
+      env.PLAYER_EMAIL_LINK_URL,
+      "/portal/cs2-next/link-email",
+      "PLAYER_EMAIL_LINK_URL",
+    ),
+    linkSubject: parseString(
+      env.PLAYER_EMAIL_LINK_SUBJECT,
+      "Link your email to HSC",
+    ),
   };
 
   if (!enabled) {

@@ -1,5 +1,10 @@
 // src/config/playerSteamAuth.js
-import { parseBoolean, parseAbsoluteUrl, parseRedirectUrl } from "./helpers.js";
+import {
+  parseBoolean,
+  parseAbsoluteUrl,
+  parsePositiveInt,
+  parseRedirectUrl,
+} from "./helpers.js";
 
 export function buildPlayerSteamAuthConfig(
   env = process.env,
@@ -16,6 +21,16 @@ export function buildPlayerSteamAuthConfig(
     env.PLAYER_STEAM_RETURN_URL,
     `${defaultPublicUrl}/player/auth/steam/callback`,
     "PLAYER_STEAM_RETURN_URL",
+  );
+  const linkReturnUrl = parseAbsoluteUrl(
+    env.PLAYER_STEAM_LINK_RETURN_URL,
+    `${defaultPublicUrl}/player/auth/steam/link/callback`,
+    "PLAYER_STEAM_LINK_RETURN_URL",
+  );
+  const linkTtlMinutes = parsePositiveInt(
+    env.PLAYER_STEAM_LINK_TTL_MINUTES,
+    10,
+    "PLAYER_STEAM_LINK_TTL_MINUTES",
   );
   const realm = parseAbsoluteUrl(
     env.PLAYER_STEAM_REALM,
@@ -42,6 +57,8 @@ export function buildPlayerSteamAuthConfig(
   return {
     enabled,
     returnUrl,
+    linkReturnUrl,
+    linkTtlMinutes,
     realm,
     loginUrl,
     successRedirectUrl,

@@ -33,13 +33,16 @@ export class PlayerSteamOpenIdService {
     };
   }
 
-  buildStartUrl(): string {
+  buildStartUrl(expectedReturnTo?: string): string {
     const authConfig = this.config.playerSteamAuth;
+    const returnTo =
+      expectedReturnTo ?? authConfig.returnUrl;
+
     const url = new URL(authConfig.loginUrl);
 
     url.searchParams.set("openid.ns", OPENID_NS);
     url.searchParams.set("openid.mode", "checkid_setup");
-    url.searchParams.set("openid.return_to", authConfig.returnUrl);
+    url.searchParams.set("openid.return_to", returnTo);
     url.searchParams.set("openid.realm", authConfig.realm);
     url.searchParams.set("openid.identity", OPENID_IDENTIFIER_SELECT);
     url.searchParams.set("openid.claimed_id", OPENID_IDENTIFIER_SELECT);
@@ -98,8 +101,11 @@ export class PlayerSteamOpenIdService {
 
   async verifyCallback(
     query: Record<string, unknown>,
+    expectedReturnTo?: string,
   ): Promise<SteamOpenIdResult> {
     const authConfig = this.config.playerSteamAuth;
+    const returnToExpected =
+      expectedReturnTo ?? authConfig.returnUrl;
 
     const mode = this.readStringQueryValue(query, "openid.mode");
     const ns = this.readStringQueryValue(query, "openid.ns");
@@ -122,7 +128,7 @@ export class PlayerSteamOpenIdService {
       return { ok: false, error: "steam_openid_invalid_op_endpoint" };
     }
 
-    if (returnTo !== authConfig.returnUrl) {
+    if (returnTo !== returnToExpected) {
       return { ok: false, error: "steam_openid_return_to_mismatch" };
     }
 

@@ -55,10 +55,15 @@ export interface AppConfig {
     readonly passwordResetTtlMinutes: number;
     readonly passwordResetUrl: string;
     readonly passwordResetSubject: string;
+    readonly linkTtlMinutes: number;
+    readonly linkUrl: string;
+    readonly linkSubject: string;
   };
   readonly playerSteamAuth: {
     readonly enabled: boolean;
     readonly returnUrl: string;
+    readonly linkReturnUrl: string;
+    readonly linkTtlMinutes: number;
     readonly realm: string;
     readonly loginUrl: string;
     readonly successRedirectUrl: string;
