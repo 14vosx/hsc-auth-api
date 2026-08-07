@@ -66,6 +66,18 @@ function isBase64Url(value: string): boolean {
 
 @Injectable()
 export class PlayerPasswordService {
+  private dummyPasswordHash: Promise<string> | null = null;
+
+  private getDummyPasswordHash(): Promise<string> {
+    if (!this.dummyPasswordHash) {
+      this.dummyPasswordHash = this.hashPassword(
+        "HSC dummy password for timing equalization",
+      );
+    }
+
+    return this.dummyPasswordHash;
+  }
+
   isValidPassword(input: unknown): input is string {
     return isValidPasswordInput(input);
   }
@@ -98,6 +110,29 @@ export class PlayerPasswordService {
       salt.toString("base64url"),
       derivedKey.toString("base64url"),
     ].join("$");
+  }
+
+  async verifyPasswordOrDummy(
+    input: unknown,
+    storedHash: string | null,
+  ): Promise<boolean> {
+    const inputIsValid = isValidPasswordInput(input);
+
+    const candidate = inputIsValid
+      ? input
+      : "HSC invalid password timing equalization";
+
+    const hash =
+      storedHash ?? await this.getDummyPasswordHash();
+
+    const matches =
+      await this.verifyPassword(candidate, hash);
+
+    return (
+      storedHash !== null &&
+      inputIsValid &&
+      matches
+    );
   }
 
   async verifyPassword(

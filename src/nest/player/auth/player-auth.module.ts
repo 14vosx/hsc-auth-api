@@ -15,6 +15,15 @@ import { PlayerEmailVerificationDeliveryService } from "./player-email-verificat
 import { PlayerEmailVerificationRepository } from "./player-email-verification.repository.js";
 import { PlayerEmailVerificationService } from "./player-email-verification.service.js";
 import { PlayerEmailVerificationController } from "./player-email-verification.controller.js";
+import { PlayerEmailLoginRepository } from "./player-email-login.repository.js";
+import { PlayerEmailLoginService } from "./player-email-login.service.js";
+import { PlayerEmailLoginController } from "./player-email-login.controller.js";
+import { PlayerEmailPasswordResetRepository } from "./player-email-password-reset.repository.js";
+import { PlayerEmailPasswordResetRequestService } from "./player-email-password-reset-request.service.js";
+import { PlayerEmailPasswordResetDeliveryService } from "./player-email-password-reset-delivery.service.js";
+import { PlayerEmailPasswordResetRequestController } from "./player-email-password-reset-request.controller.js";
+import { PlayerEmailPasswordResetConfirmService } from "./player-email-password-reset-confirm.service.js";
+import { PlayerEmailPasswordResetConfirmController } from "./player-email-password-reset-confirm.controller.js";
 
 @Module({
   controllers: [
@@ -23,6 +32,9 @@ import { PlayerEmailVerificationController } from "./player-email-verification.c
     PlayerSteamAuthController,
     PlayerEmailRegistrationController,
     PlayerEmailVerificationController,
+    PlayerEmailLoginController,
+    PlayerEmailPasswordResetRequestController,
+    PlayerEmailPasswordResetConfirmController,
   ],
   providers: [
     PlayerSessionRepository,
@@ -36,6 +48,12 @@ import { PlayerEmailVerificationController } from "./player-email-verification.c
     PlayerEmailVerificationDeliveryService,
     PlayerEmailVerificationRepository,
     PlayerEmailVerificationService,
+    PlayerEmailLoginRepository,
+    PlayerEmailLoginService,
+    PlayerEmailPasswordResetRepository,
+    PlayerEmailPasswordResetRequestService,
+    PlayerEmailPasswordResetDeliveryService,
+    PlayerEmailPasswordResetConfirmService,
   ],
   exports: [
     PlayerSessionRepository,
@@ -47,6 +65,12 @@ import { PlayerEmailVerificationController } from "./player-email-verification.c
     PlayerEmailVerificationDeliveryService,
     PlayerEmailVerificationRepository,
     PlayerEmailVerificationService,
+    PlayerEmailLoginRepository,
+    PlayerEmailLoginService,
+    PlayerEmailPasswordResetRepository,
+    PlayerEmailPasswordResetRequestService,
+    PlayerEmailPasswordResetDeliveryService,
+    PlayerEmailPasswordResetConfirmService,
   ],
 })
 export class PlayerAuthModule {}

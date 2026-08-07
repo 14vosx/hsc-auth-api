@@ -52,6 +52,9 @@ export interface AppConfig {
     readonly verificationUrl: string;
     readonly fromEmail: string;
     readonly verificationSubject: string;
+    readonly passwordResetTtlMinutes: number;
+    readonly passwordResetUrl: string;
+    readonly passwordResetSubject: string;
   };
   readonly playerSteamAuth: {
     readonly enabled: boolean;
