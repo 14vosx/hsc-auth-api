@@ -174,6 +174,22 @@ ops/deploy-auth.sh
 hscadmin
 ```
 
+Host de produção atual:
+
+```text
+ip-172-26-13-181
+```
+
+O guard do script usa:
+
+```text
+DEPLOY_EXPECTED_HOST
+```
+
+com `ip-172-26-13-181` como default. O override existe apenas para mudança
+operacional explícita de host; não deve ser usado para contornar um mismatch
+não investigado.
+
 Diretório esperado:
 
 ```text
@@ -546,10 +562,22 @@ O workflow:
 
 - recebe uma tag;
 - verifica se pertence ao histórico de `main`;
-- conecta por SSH;
-- delega para `ops/deploy-auth.sh`.
+- conecta por SSH ao Lightsail;
+- busca explicitamente a tag alvo no repositório do servidor;
+- extrai `ops/deploy-auth.sh` diretamente da própria tag para um arquivo temporário;
+- executa essa cópia temporária como `hscadmin`.
 
-O script no servidor continua sendo a fonte de verdade do processo de deploy.
+O deploy normal não deve iniciar chamando diretamente o
+`ops/deploy-auth.sh` que já estava instalado no checkout anterior.
+
+Essa regra evita o problema de bootstrap em que a primeira implantação de uma
+nova versão seria governada pelo script operacional da versão antiga.
+
+O arquivo temporário também impede que o checkout da tag substitua o script que
+está executando o próprio deploy.
+
+Para rollback, o workflow copia primeiro o script atualmente instalado para
+`/tmp` e executa a cópia, evitando o mesmo risco de auto-substituição.
 
 ---
 

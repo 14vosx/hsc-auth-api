@@ -96,11 +96,66 @@ jobs:
           script: |
             set -euo pipefail
 
+            APP_DIR="/opt/hsc/hsc-auth-api"
+
+            if [[ ! -d "$APP_DIR/.git" ]]; then
+              echo "❌ Repository not found: $APP_DIR"
+              exit 1
+            fi
+
             if [[ "${{ steps.target.outputs.mode }}" == "rollback" ]]; then
-              sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh --rollback
+              echo "↩️  Bootstrapping rollback from currently installed deploy script..."
+
+              TMP_DEPLOY_SCRIPT="$(mktemp /tmp/hsc-auth-deploy-rollback.XXXXXX.sh)"
+              trap 'rm -f "$TMP_DEPLOY_SCRIPT"' EXIT
+
+              cat "$APP_DIR/ops/deploy-auth.sh" > "$TMP_DEPLOY_SCRIPT"
+              chmod 0755 "$TMP_DEPLOY_SCRIPT"
+
+              sudo -u hscadmin -H \
+                bash "$TMP_DEPLOY_SCRIPT" --rollback
+
               exit 0
             fi
 
             TAG="${{ steps.target.outputs.tag }}"
+
             echo "➡️  Deploying TAG: $TAG"
-            sudo -u hscadmin -H /opt/hsc/hsc-auth-api/ops/deploy-auth.sh "$TAG"
+            echo "➡️  Fetching target tag on Lightsail..."
+
+            sudo -u hscadmin -H \
+              git -C "$APP_DIR" fetch origin \
+              "refs/tags/${TAG}:refs/tags/${TAG}" \
+              --force
+
+            if ! sudo -u hscadmin -H \
+              git -C "$APP_DIR" show-ref \
+              --verify \
+              --quiet \
+              "refs/tags/${TAG}"
+            then
+              echo "❌ Target tag unavailable on Lightsail: $TAG"
+              exit 1
+            fi
+
+            TMP_DEPLOY_SCRIPT="$(mktemp /tmp/hsc-auth-deploy-target.XXXXXX.sh)"
+            trap 'rm -f "$TMP_DEPLOY_SCRIPT"' EXIT
+
+            echo "➡️  Extracting deploy script from target tag..."
+
+            sudo -u hscadmin -H \
+              git -C "$APP_DIR" show \
+              "${TAG}:ops/deploy-auth.sh" \
+              > "$TMP_DEPLOY_SCRIPT"
+
+            if [[ ! -s "$TMP_DEPLOY_SCRIPT" ]]; then
+              echo "❌ Target deploy script is empty or unavailable."
+              exit 1
+            fi
+
+            chmod 0755 "$TMP_DEPLOY_SCRIPT"
+
+            echo "➡️  Executing deploy script from target tag..."
+
+            sudo -u hscadmin -H \
+              bash "$TMP_DEPLOY_SCRIPT" "$TAG"
