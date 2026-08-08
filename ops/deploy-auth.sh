@@ -7,7 +7,7 @@ HEALTH_URL="http://127.0.0.1:3000/health"
 LOG_DIR="/var/log/hsc"
 LOG_FILE="$LOG_DIR/deploy-auth.log"
 
-EXPECTED_HOST="ip-172-26-2-109"
+EXPECTED_HOST="${DEPLOY_EXPECTED_HOST:-ip-172-26-13-181}"
 LOCK_FILE="/tmp/hsc-auth-deploy.lock"
 STATE_FILE="/opt/hsc/.deploy-auth-last-tag"
 
