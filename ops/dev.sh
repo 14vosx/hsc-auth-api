@@ -2,19 +2,27 @@
 set -euo pipefail
 
 # ======================================
-# HSC AUTH API — DEV (LOCAL, PERSISTENTE)
-# - Sobe dependências (MariaDB via Docker)
-# - Aguarda MariaDB ficar pronto
-# - Sobe a API com .env.local
-# - Não encerra automaticamente (Ctrl+C para parar a API)
+# HSC AUTH API — DEV LOCAL PERSISTENTE
+#
+# - Sobe dependências Docker locais
+# - Aguarda MariaDB ficar pronta
+# - Instala dependências apenas se necessário
+# - Compila o runtime NestJS
+# - Inicia a API usando ENV_FILE
+# - Permanece em foreground até Ctrl+C
 # ======================================
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_DIR="$(
+  cd "$(dirname "${BASH_SOURCE[0]}")/.." &&
+  pwd
+)"
+
 ENV_FILE="${ENV_FILE:-.env.local}"
+DB_WAIT_ATTEMPTS="${DB_WAIT_ATTEMPTS:-30}"
 
 echo "======================================"
 echo "HSC AUTH API — DEV LOCAL"
-echo "Timestamp: $(date -u)"
+echo "Timestamp (UTC): $(date -u)"
 echo "Host: $(hostname)"
 echo "User: $(whoami)"
 echo "APP_DIR: $APP_DIR"
@@ -23,76 +31,79 @@ echo "======================================"
 
 cd "$APP_DIR"
 
-# Guardrail: impedir rodar isso no servidor por engano
+# Guardrail contra execução no host de produção.
 if [[ "$APP_DIR" == /opt/hsc/* ]]; then
-  echo "❌ Este script é apenas para workstation local (APP_DIR parece produção: $APP_DIR)."
+  echo "❌ Script exclusivamente local."
+  echo "   APP_DIR parece produção: $APP_DIR"
   exit 1
 fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "❌ Arquivo de ambiente não encontrado: $APP_DIR/$ENV_FILE"
-  echo "➡️  Crie o arquivo e tente novamente."
+  echo "❌ Arquivo de ambiente não encontrado:"
+  echo "   $APP_DIR/$ENV_FILE"
   exit 1
 fi
 
-# Validar docker + compose
 if ! command -v docker >/dev/null 2>&1; then
   echo "❌ docker não encontrado."
   exit 1
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-  echo "❌ docker compose plugin não disponível."
+  echo "❌ docker compose não disponível."
   exit 1
 fi
 
-# Carrega variáveis no ambiente atual cedo, para usar no wait loop
-set -a
-. "$ENV_FILE"
-set +a
+echo
+echo "➡️  Subindo dependências locais..."
+docker compose up -d
 
-# Subir dependências (se houver compose)
-if [[ -f "docker-compose.yml" || -f "compose.yml" ]]; then
-  echo "➡️  Subindo dependências (docker compose up -d)..."
-  docker compose up -d
+echo
+echo "➡️  Aguardando MariaDB..."
 
-  echo "➡️  Aguardando MariaDB ficar pronto..."
+DB_READY=0
 
-  MAX_ATTEMPTS=5
-  ATTEMPT=1
-
-  while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
-    if docker exec hsc-auth-mariadb mariadb-admin ping \
-      -h 127.0.0.1 \
-      -u"${DB_USER}" \
-      -p"${DB_PASS}" \
-      --silent >/dev/null 2>&1; then
-      echo "✅ MariaDB pronto."
-      break
-    fi
-
-    echo "   tentativa $ATTEMPT/$MAX_ATTEMPTS..."
-    ATTEMPT=$((ATTEMPT + 1))
-    sleep 2
-  done
-
-  if [[ $ATTEMPT -gt $MAX_ATTEMPTS ]]; then
-    echo "❌ MariaDB não ficou pronto a tempo."
-    echo "➡️  Verifique: docker compose ps"
-    echo "➡️  Verifique: docker compose logs --tail=100"
-    exit 1
+for ATTEMPT in $(seq 1 "$DB_WAIT_ATTEMPTS"); do
+  if docker compose exec -T mariadb \
+    mariadb-admin ping \
+    -h 127.0.0.1 \
+    --silent \
+    >/dev/null 2>&1
+  then
+    DB_READY=1
+    break
   fi
-else
-  echo "⚠️  Nenhum docker-compose.yml encontrado. Pulando dependências."
+
+  echo "   tentativa $ATTEMPT/$DB_WAIT_ATTEMPTS..."
+  sleep 1
+done
+
+if [[ "$DB_READY" -ne 1 ]]; then
+  echo "❌ MariaDB não ficou pronta a tempo."
+  echo "➡️  Verifique:"
+  echo "   docker compose ps"
+  echo "   docker compose logs --tail=100 mariadb"
+  exit 1
 fi
 
-echo "➡️  Instalando dependências Node (npm ci)..."
-npm ci
+echo "✅ MariaDB pronta."
 
-echo "➡️  Compilando runtime NestJS (npm run build:nest)..."
+echo
+if [[ ! -d node_modules ]]; then
+  echo "➡️  node_modules ausente; executando npm ci..."
+  npm ci
+else
+  echo "➡️  node_modules presente; npm ci não é necessário."
+fi
+
+echo
+echo "➡️  Compilando runtime NestJS..."
 npm run build:nest
 
-echo "➡️  Iniciando API (ENV_FILE=$ENV_FILE)..."
+echo
+echo "➡️  Iniciando API..."
+echo "   Ctrl+C encerra somente o processo Node."
+echo "   Para dependências Docker use: ./ops/stop.sh"
+echo
 
-# sobe a API com env já carregado
-node index.js
+ENV_FILE="$ENV_FILE" npm start

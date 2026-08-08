@@ -52,13 +52,6 @@ cd "$APP_DIR"
 # .env parametrizável (default: .env)
 ENV_FILE="${ENV_FILE:-.env}"
 
-# Admin key necessária para smoke em /admin/*
-ADMIN_KEY_ENV="$(grep -m1 '^ADMIN_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '\r\n')"
-if [[ -z "${ADMIN_KEY_ENV:-}" ]]; then
-  echo "❌ ADMIN_KEY não encontrado em $APP_DIR/$ENV_FILE (necessário para smoke admin)."
-  exit 1
-fi
-
 if [[ "${1:-}" == "--rollback" ]]; then
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "❌ Rollback solicitado, mas não existe state file: $STATE_FILE"
@@ -120,6 +113,45 @@ fi
 echo "➡️  Limpando dependências de desenvolvimento (npm prune)..."
 npm prune --omit=dev
 
+echo "➡️  Validando configuração da tag antes das migrations..."
+
+HAS_DEPLOY_PREFLIGHT="$(node -e '
+try {
+  const pkg = JSON.parse(
+    require("fs").readFileSync(
+      "package.json",
+      "utf8",
+    ),
+  );
+
+  console.log(
+    Boolean(
+      pkg &&
+      pkg.scripts &&
+      pkg.scripts["preflight:deploy"]
+    )
+      ? "true"
+      : "false",
+  );
+} catch {
+  console.log("false");
+}
+')"
+
+if [[ "$HAS_DEPLOY_PREFLIGHT" == "true" ]]; then
+  echo "➡️  Pre-flight moderno: npm run preflight:deploy"
+
+  if ! ENV_FILE="$ENV_FILE"     npm run preflight:deploy
+  then
+    echo "❌ Configuração da aplicação inválida para deploy."
+    echo "➡️  Migrations e restart NÃO foram executados."
+    exit 1
+  fi
+else
+  echo "ℹ️  Tag anterior ao preflight:deploy."
+  echo "➡️  Pulando pre-flight moderno para compatibilidade de rollback."
+fi
+
 echo "➡️  Rodando migrations do banco..."
 ENV_FILE="$ENV_FILE" npm run db:migrate
 
@@ -132,36 +164,69 @@ sleep 2
 echo "➡️  Status do serviço:"
 sudo /usr/bin/systemctl status "$SERVICE" --no-pager -l | sed -n '1,12p'
 
-echo "➡️  Testando health endpoint..."
-if ! curl -fsS "$HEALTH_URL" | grep '"ok":true' >/dev/null; then
-  echo "❌ Health check falhou."
-  echo "➡️  Últimos logs do serviço (journalctl):"
-  sudo /usr/bin/journalctl -u "$SERVICE" -n 80 --no-pager
-  exit 1
-fi
+echo "➡️  Executando smoke pós-deploy..."
 
-echo "➡️  Smoke: /content/news ..."
-if ! curl -fsS "http://127.0.0.1:3000/content/news" | grep '"ok":true' >/dev/null; then
-  echo "❌ Smoke /content/news falhou."
-  exit 1
-fi
+HAS_SMOKE_DEPLOY="$(node -e '
+try {
+  const pkg = JSON.parse(
+    require("fs").readFileSync(
+      "package.json",
+      "utf8",
+    ),
+  );
 
-echo "➡️  Smoke: /content/seasons ..."
-if ! curl -fsS "http://127.0.0.1:3000/content/seasons" | grep '"ok":true' >/dev/null; then
-  echo "❌ Smoke /content/seasons falhou."
-  exit 1
-fi
+  console.log(
+    Boolean(
+      pkg &&
+      pkg.scripts &&
+      pkg.scripts["smoke:deploy"]
+    )
+      ? "true"
+      : "false",
+  );
+} catch {
+  console.log("false");
+}
+')"
 
-echo "➡️  Smoke: /content/seasons/active ..."
-if ! curl -fsS "http://127.0.0.1:3000/content/seasons/active" | grep '"ok":true' >/dev/null; then
-  echo "❌ Smoke /content/seasons/active falhou."
-  exit 1
-fi
+if [[ "$HAS_SMOKE_DEPLOY" == "true" ]]; then
+  echo "➡️  Smoke moderno: npm run smoke:deploy"
 
-echo "➡️  Smoke: /admin/schema ..."
-if ! curl -fsS "http://127.0.0.1:3000/admin/schema" -H "X-Admin-Key: $ADMIN_KEY_ENV" | grep '"ok":true' >/dev/null; then
-  echo "❌ Smoke admin (/admin/schema) falhou."
-  exit 1
+  if ! DEPLOY_SMOKE_BASE_URL="http://127.0.0.1:3000"     npm run smoke:deploy
+  then
+    echo "❌ Smoke pós-deploy falhou."
+    echo "➡️  Últimos logs do serviço (journalctl):"
+    sudo /usr/bin/journalctl       -u "$SERVICE"       -n 80       --no-pager
+    exit 1
+  fi
+else
+  echo "ℹ️  Tag anterior ao smoke:deploy."
+  echo "➡️  Executando fallback legado mínimo e read-only."
+
+  if ! curl -fsS "$HEALTH_URL"     | grep '"ok":true' >/dev/null
+  then
+    echo "❌ Legacy health check falhou."
+    sudo /usr/bin/journalctl       -u "$SERVICE"       -n 80       --no-pager
+    exit 1
+  fi
+
+  if ! curl -fsS     "http://127.0.0.1:3000/content/news"     | grep '"ok":true' >/dev/null
+  then
+    echo "❌ Legacy smoke /content/news falhou."
+    exit 1
+  fi
+
+  if ! curl -fsS     "http://127.0.0.1:3000/content/seasons"     | grep '"ok":true' >/dev/null
+  then
+    echo "❌ Legacy smoke /content/seasons falhou."
+    exit 1
+  fi
+
+  if ! curl -fsS     "http://127.0.0.1:3000/content/seasons/active"     | grep '"ok":true' >/dev/null
+  then
+    echo "❌ Legacy smoke /content/seasons/active falhou."
+    exit 1
+  fi
 fi
 
 echo "✅ Deploy concluído com sucesso!"
