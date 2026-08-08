@@ -386,8 +386,13 @@ Não modificar sem pedido explícito:
 .github/workflows/**
 ops/deploy-auth.sh
 ops/release.sh
-ops/deploy-local.sh
 docker-compose.yml
+```
+
+Runbook operacional canônico:
+
+```text
+docs/deploy-release-runbook.md
 ```
 
 A leitura desses arquivos é permitida quando necessária para entender o projeto.

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SMOKE_SCRIPT="$APP_DIR/ops/smoke-local.sh"
 LOCAL_ENV_FILE="${LOCAL_ENV_FILE:-.env.local}"
 
 TAG="${1:-}"
@@ -68,13 +67,7 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   exit 1
 fi
 
-# Rodar smoke local obrigatório
-if [[ ! -x "$SMOKE_SCRIPT" ]]; then
-  echo "❌ Smoke script não encontrado/executável: $SMOKE_SCRIPT"
-  echo "➡️  Garanta que existe e rode: chmod +x ops/smoke-local.sh"
-  exit 1
-fi
-
+# Ambiente local obrigatório para validação da release
 if [[ ! -f "$APP_DIR/$LOCAL_ENV_FILE" ]]; then
   echo "❌ ENV local não encontrado: $APP_DIR/$LOCAL_ENV_FILE"
   exit 1
@@ -83,9 +76,8 @@ fi
 echo "➡️  Rodando migrations locais..."
 ENV_FILE="$LOCAL_ENV_FILE" npm run db:migrate
 
-
-echo "➡️  Rodando smoke local (obrigatório)..."
-"$SMOKE_SCRIPT"
+echo "➡️  Rodando smoke local canônico (obrigatório)..."
+ENV_FILE="$LOCAL_ENV_FILE" npm run smoke:local
 
 echo "➡️  Criando tag anotada: $TAG"
 git tag -a "$TAG" -m "release: $TAG"
