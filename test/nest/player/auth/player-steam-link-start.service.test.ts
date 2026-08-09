@@ -58,6 +58,7 @@ test("PlayerSteamLinkStartService - cria intent para a conta autenticada e prend
     await service.start("account-id"),
     {
       ok: true,
+      state: "a".repeat(64),
       redirectUrl:
         "https://steam.example/openid",
     },

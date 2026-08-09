@@ -31,6 +31,10 @@ test("buildAppConfig - defaults", () => {
 
   assert.equal(config.playerSteamAuth.enabled, false);
   assert.equal(
+    config.playerSteamAuth.linkRedirectUrl,
+    "https://haxixesmokeclub.com/area-do-jogador",
+  );
+  assert.equal(
     config.playerSteamAuth.returnUrl,
     "https://auth-api.haxixesmokeclub.com/player/auth/steam/callback",
   );
@@ -203,6 +207,38 @@ test("buildAppConfig - redirects relativos e absolutos", () => {
       err instanceof ConfigError &&
       err.key === "PLAYER_AUTH_FAILURE_REDIRECT_URL",
   );
+});
+
+test("buildAppConfig - redirect absoluto do Steam linking", () => {
+  const httpConfig = buildAppConfig({
+    PLAYER_STEAM_LINK_REDIRECT_URL:
+      "http://localhost:5173/area-do-jogador",
+  });
+  assert.equal(
+    httpConfig.playerSteamAuth.linkRedirectUrl,
+    "http://localhost:5173/area-do-jogador",
+  );
+
+  const httpsConfig = buildAppConfig({
+    PLAYER_STEAM_LINK_REDIRECT_URL:
+      "https://portal.example/area-do-jogador",
+  });
+  assert.equal(
+    httpsConfig.playerSteamAuth.linkRedirectUrl,
+    "https://portal.example/area-do-jogador",
+  );
+
+  for (const value of ["/area-do-jogador", "ftp://portal.example/link"]) {
+    assert.throws(
+      () =>
+        buildAppConfig({
+          PLAYER_STEAM_LINK_REDIRECT_URL: value,
+        }),
+      (err) =>
+        err instanceof ConfigError &&
+        err.key === "PLAYER_STEAM_LINK_REDIRECT_URL",
+    );
+  }
 });
 
 test("buildAppConfig - timeout inválido", () => {

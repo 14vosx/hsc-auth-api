@@ -14,6 +14,14 @@ import {
   PlayerAuthGuard,
 } from "./player-auth.guard.js";
 import {
+  APP_CONFIG,
+  AppConfig,
+} from "../../core/app-config.js";
+import {
+  buildClearPlayerSteamLinkStateCookie,
+  buildPlayerSteamLinkStateCookie,
+} from "./player-steam-link-state.js";
+import {
   PlayerSteamLinkStartService,
   type PlayerSteamLinkStartResult,
 } from "./player-steam-link-start.service.js";
@@ -25,6 +33,7 @@ interface PlayerAuthRequest {
 interface HttpResponse {
   status(statusCode: number): HttpResponse;
   json(body: unknown): void;
+  setHeader(name: string, value: string): void;
   redirect(statusCode: number, url: string): void;
 }
 
@@ -38,10 +47,32 @@ export interface PlayerSteamLinkStartServicePort {
 @UseGuards(PlayerAuthGuard)
 export class PlayerSteamLinkStartController {
   constructor(
+    @Inject(APP_CONFIG)
+    private readonly config: AppConfig,
+
     @Inject(PlayerSteamLinkStartService)
     private readonly service:
       PlayerSteamLinkStartServicePort,
   ) {}
+
+  private redirectToPortal(
+    response: HttpResponse,
+    publicCode: "already_linked" | "unavailable" | "failed",
+  ): void {
+    response.setHeader(
+      "Set-Cookie",
+      buildClearPlayerSteamLinkStateCookie(
+        this.config.runtime.publicUrl,
+      ),
+    );
+
+    const redirectUrl = new URL(
+      this.config.playerSteamAuth.linkRedirectUrl,
+    );
+
+    redirectUrl.searchParams.set("steamLink", publicCode);
+    response.redirect(HttpStatus.FOUND, redirectUrl.toString());
+  }
 
   @Get("start")
   async start(
@@ -69,12 +100,7 @@ export class PlayerSteamLinkStartController {
         "[player-auth] Steam link start failed",
       );
 
-      response
-        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .json({
-          ok: false,
-          error: "steam_link_start_failed",
-        });
+      this.redirectToPortal(response, "failed");
       return;
     }
 
@@ -83,12 +109,7 @@ export class PlayerSteamLinkStartController {
         result.error ===
         "steam_auth_unavailable"
       ) {
-        response
-          .status(HttpStatus.NOT_IMPLEMENTED)
-          .json({
-            ok: false,
-            error: result.error,
-          });
+        this.redirectToPortal(response, "unavailable");
         return;
       }
 
@@ -109,12 +130,7 @@ export class PlayerSteamLinkStartController {
         result.error ===
         "steam_identity_already_linked"
       ) {
-        response
-          .status(HttpStatus.CONFLICT)
-          .json({
-            ok: false,
-            error: result.error,
-          });
+        this.redirectToPortal(response, "already_linked");
         return;
       }
 
@@ -126,6 +142,15 @@ export class PlayerSteamLinkStartController {
         });
       return;
     }
+
+    response.setHeader(
+      "Set-Cookie",
+      buildPlayerSteamLinkStateCookie(
+        result.state,
+        this.config.runtime.publicUrl,
+        this.config.playerSteamAuth.linkTtlMinutes,
+      ),
+    );
 
     response.redirect(
       HttpStatus.FOUND,
