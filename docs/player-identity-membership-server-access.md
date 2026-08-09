@@ -253,7 +253,7 @@ As mutações são protegidas por autenticação, CSRF e throttling.
 Contrato:
 
 ```text
-GET /players/:slug
+GET /player/profiles/:slug
 ```
 
 Esse contrato exige usuário HSC autenticado.
