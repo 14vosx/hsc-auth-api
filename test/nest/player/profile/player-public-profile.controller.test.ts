@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import {
   HttpException,
   HttpStatus,
+  RequestMethod,
 } from "@nestjs/common";
+import {
+  METHOD_METADATA,
+  PATH_METADATA,
+} from "@nestjs/common/constants.js";
 
 import {
   PlayerPublicProfileController,
@@ -20,6 +25,36 @@ const PROFILE = {
   preferredMap: "de_mirage",
   joinedAt: "2026-08-07 18:00:00",
 };
+
+test("PlayerPublicProfileController - registra GET /player/profiles/:slug", () => {
+  const controllerPath =
+    Reflect.getMetadata(
+      PATH_METADATA,
+      PlayerPublicProfileController,
+    ) as string;
+  const handler =
+    PlayerPublicProfileController
+      .prototype.getBySlug;
+  const methodPath =
+    Reflect.getMetadata(
+      PATH_METADATA,
+      handler,
+    ) as string;
+  const requestMethod =
+    Reflect.getMetadata(
+      METHOD_METADATA,
+      handler,
+    ) as RequestMethod;
+
+  assert.equal(
+    requestMethod,
+    RequestMethod.GET,
+  );
+  assert.equal(
+    `/${controllerPath}/${methodPath}`,
+    "/player/profiles/:slug",
+  );
+});
 
 test("PlayerPublicProfileController - retorna somente profile público", async () => {
   const controller =

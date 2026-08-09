@@ -354,7 +354,7 @@ GET  /health
 /player/profile/*
 /player/membership
 /player/bunker/*
-/players/:slug
+/player/profiles/:slug
 
 /internal/steam/*
 /internal/server-access/*
@@ -409,7 +409,7 @@ Contratos principais:
 GET   /player/account
 GET   /player/profile/me
 PATCH /player/profile/me
-GET   /players/:slug
+GET   /player/profiles/:slug
 GET   /player/membership
 ```
 

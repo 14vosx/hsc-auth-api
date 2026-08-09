@@ -21,7 +21,7 @@ export interface PlayerPublicProfileServicePort {
   ): Promise<PlayerPublicProfileReadResult>;
 }
 
-@Controller("players")
+@Controller("player/profiles")
 @UseGuards(PlayerAuthGuard)
 export class PlayerPublicProfileController {
   constructor(
