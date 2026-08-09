@@ -29,6 +29,7 @@ export type PlayerSteamLinkStartResult =
   | {
       ok: true;
       redirectUrl: string;
+      state: string;
     }
   | {
       ok: false;
@@ -86,6 +87,7 @@ export class PlayerSteamLinkStartService {
 
     return {
       ok: true,
+      state: intent.rawToken,
       redirectUrl:
         this.openIdService.buildStartUrl(
           returnTo.toString(),

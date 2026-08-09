@@ -32,6 +32,11 @@ export function buildPlayerSteamAuthConfig(
     10,
     "PLAYER_STEAM_LINK_TTL_MINUTES",
   );
+  const linkRedirectUrl = parseAbsoluteUrl(
+    env.PLAYER_STEAM_LINK_REDIRECT_URL,
+    "https://haxixesmokeclub.com/area-do-jogador",
+    "PLAYER_STEAM_LINK_REDIRECT_URL",
+  );
   const realm = parseAbsoluteUrl(
     env.PLAYER_STEAM_REALM,
     defaultPublicUrl,
@@ -59,6 +64,7 @@ export function buildPlayerSteamAuthConfig(
     returnUrl,
     linkReturnUrl,
     linkTtlMinutes,
+    linkRedirectUrl,
     realm,
     loginUrl,
     successRedirectUrl,
