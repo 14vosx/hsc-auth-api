@@ -87,6 +87,27 @@ export class ServerAccessRepository {
   async authorizeBySteamId64(
     steamid64: string,
   ): Promise<ServerAccessDecision> {
+    return this.authorizeByIdentity(
+      "s.steamid64",
+      steamid64,
+    );
+  }
+
+  async authorizeByPlayerAccountId(
+    playerAccountId: string,
+  ): Promise<ServerAccessDecision> {
+    return this.authorizeByIdentity(
+      "a.id",
+      playerAccountId,
+    );
+  }
+
+  private async authorizeByIdentity(
+    lookupColumn:
+      | "s.steamid64"
+      | "a.id",
+    lookupValue: string,
+  ): Promise<ServerAccessDecision> {
     const pool =
       this.databaseService.getPool();
 
@@ -118,11 +139,11 @@ export class ServerAccessRepository {
             ON m.player_account_id =
               a.id
 
-          WHERE s.steamid64 = ?
+          WHERE ${lookupColumn} = ?
 
           LIMIT 1
         `,
-        [steamid64],
+        [lookupValue],
       );
 
     const row = rows[0];

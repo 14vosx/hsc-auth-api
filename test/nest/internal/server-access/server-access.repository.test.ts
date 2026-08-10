@@ -8,6 +8,9 @@ import {
 const STEAMID64 =
   "76561198104061513";
 
+const PLAYER_ACCOUNT_ID =
+  "11111111-1111-4111-8111-111111111111";
+
 function createRepository(
   rows: unknown[],
 ) {
@@ -248,4 +251,133 @@ test("cancelled membership denies", async () => {
         "membership_cancelled",
     },
   );
+});
+
+test("player lookup is owner-scoped by playerAccountId", async () => {
+  const {
+    repository,
+    getSql,
+    getParams,
+  } = createRepository([
+    row(),
+  ]);
+
+  await repository
+    .authorizeByPlayerAccountId(
+      PLAYER_ACCOUNT_ID,
+    );
+
+  assert.match(
+    getSql(),
+    /WHERE a\.id = \?/,
+  );
+
+  assert.deepEqual(
+    getParams(),
+    [PLAYER_ACCOUNT_ID],
+  );
+
+  assert.doesNotMatch(
+    getSql(),
+    /password_hash|token_hash/i,
+  );
+});
+
+test("player lookup returns every authoritative Server Access decision", async (t) => {
+  const cases = [
+    {
+      name: "linked active member",
+      rows: [row()],
+      expected: {
+        authorized: true,
+        reason: "membership_active",
+      },
+    },
+    {
+      name: "Steam identity not linked",
+      rows: [],
+      expected: {
+        authorized: false,
+        reason:
+          "steam_identity_not_linked",
+      },
+    },
+    {
+      name: "disabled account",
+      rows: [
+        row({
+          account_status:
+            "disabled",
+        }),
+      ],
+      expected: {
+        authorized: false,
+        reason:
+          "player_account_disabled",
+      },
+    },
+    {
+      name: "membership required",
+      rows: [
+        row({
+          membership_status: null,
+        }),
+      ],
+      expected: {
+        authorized: false,
+        reason:
+          "membership_required",
+      },
+    },
+    ...[
+      "inactive",
+      "suspended",
+      "cancelled",
+    ].map((status) => ({
+      name: `${status} membership`,
+      rows: [
+        row({
+          membership_status: status,
+        }),
+      ],
+      expected: {
+        authorized: false,
+        reason: `membership_${status}`,
+      },
+    })),
+    {
+      name: "effectively expired membership",
+      rows: [
+        row({
+          membership_expires_at:
+            "2026-08-07 21:59:59",
+        }),
+      ],
+      expected: {
+        authorized: false,
+        reason:
+          "membership_expired",
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(
+      testCase.name,
+      async () => {
+        const { repository } =
+          createRepository(
+            testCase.rows,
+          );
+
+        assert.deepEqual(
+          await repository
+            .authorizeByPlayerAccountId(
+              PLAYER_ACCOUNT_ID,
+            ),
+          testCase.expected,
+        );
+      },
+    );
+  }
 });
