@@ -107,6 +107,7 @@ PlayerAccountModule
 PlayerProfileModule
 PlayerMembershipModule
 PlayerBunkerModule
+PlayerServerAccessModule
 
 InternalSteamProfilesModule
 ServerAccessModule
@@ -141,6 +142,7 @@ ServerAccessModule
 * `PlayerProfileModule`: profile próprio, visibilidade member-visible e mídia de avatar/banner;
 * `PlayerMembershipModule`: leitura autenticada do membership efetivo da própria conta;
 * `PlayerBunkerModule`: gateway autenticado e defensivo para dados competitivos materializados pelo ETL.
+* `PlayerServerAccessModule`: decisão read-only de acesso ao servidor para a própria conta autenticada.
 
 ### Serviços internos
 
@@ -354,6 +356,7 @@ GET  /health
 /player/profile/*
 /player/membership
 /player/bunker/*
+/player/server-access
 /player/profiles/:slug
 
 /internal/steam/*
@@ -449,6 +452,12 @@ Contrato:
 
 ```text
 POST /internal/server-access/authorize
+```
+
+O player autenticado consulta a mesma decisão autoritativa, sem fornecer SteamID64 ou credencial interna:
+
+```text
+GET /player/server-access
 ```
 
 Esse contrato utiliza credencial própria, separada da integração de Steam Profiles.

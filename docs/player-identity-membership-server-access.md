@@ -429,6 +429,36 @@ O Backoffice não deve acessar diretamente as tabelas player.
 
 ## Server Access
 
+### Consulta do próprio player
+
+Contrato player-facing read-only:
+
+```text
+GET /player/server-access
+```
+
+Proteção:
+
+```text
+PlayerAuthGuard
+```
+
+O `playerAccountId` é derivado exclusivamente da sessão autenticada. O endpoint não aceita SteamID64, account ID ou outra identidade fornecida pelo cliente e não utiliza nem expõe `SERVER_ACCESS_INTERNAL_API_KEY`.
+
+Resposta de decisão:
+
+```json
+{
+  "ok": true,
+  "authorized": false,
+  "reason": "membership_required"
+}
+```
+
+A consulta usa as mesmas regras autoritativas do contrato interno, sem criar ou alterar conta, Steam identity ou membership. Business denial retorna HTTP `200`; falha de leitura é sanitizada e fail-closed.
+
+### Integração interna
+
 Contrato interno:
 
 ```text

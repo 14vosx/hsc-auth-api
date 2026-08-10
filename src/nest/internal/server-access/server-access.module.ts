@@ -16,5 +16,8 @@ import {
   providers: [
     ServerAccessRepository,
   ],
+  exports: [
+    ServerAccessRepository,
+  ],
 })
 export class ServerAccessModule {}
