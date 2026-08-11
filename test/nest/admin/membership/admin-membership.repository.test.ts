@@ -32,6 +32,7 @@ function membershipRow(
       status === "cancelled" ? "2026-08-07 18:20:00" : null,
     created_at: "2026-08-07 17:00:00",
     updated_at: "2026-08-07 18:00:00",
+    now_utc: "2026-08-07 18:00:00",
   };
 }
 
@@ -279,6 +280,7 @@ test("activate - locks membership row, updates status, audits and commits", asyn
         sql.includes("FOR UPDATE")
       ) {
         readCount += 1;
+        assert.match(sql, /UTC_TIMESTAMP\(\) AS now_utc/);
         assert.deepEqual(parameters, [MEMBERSHIP_ID]);
         return [[membershipRow("inactive")], []];
       }
@@ -379,6 +381,55 @@ test("suspend - invalid lifecycle rolls back before update and audit", async () 
     1,
   );
 
+  assert.equal(
+    harness.calls.filter((call) => call.kind === "commit").length,
+    0,
+  );
+});
+
+test("suspend - expired membership uses locked database time and rolls back before update and audit", async () => {
+  const harness = createHarness({
+    async execute(sql) {
+      if (
+        sql.includes("FROM player_memberships") &&
+        sql.includes("FOR UPDATE")
+      ) {
+        assert.match(sql, /UTC_TIMESTAMP\(\) AS now_utc/);
+        return [[{
+          ...membershipRow("active"),
+          expires_at: "2026-08-07 17:59:59",
+          now_utc: "2026-08-07 18:00:00",
+        }], []];
+      }
+
+      throw new Error(`unexpected SQL after expiry rejection: ${sql}`);
+    },
+  });
+
+  const result = await harness.repository.suspendMembership(
+    MEMBERSHIP_ID,
+    AUDIT,
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "membership_expired",
+  });
+
+  assert.equal(
+    sqlCalls(harness.calls).some((call) =>
+      call.sql?.includes("UPDATE player_memberships"),
+    ),
+    false,
+  );
+  assert.equal(
+    harness.calls.filter((call) => call.kind === "audit").length,
+    0,
+  );
+  assert.equal(
+    harness.calls.filter((call) => call.kind === "rollback").length,
+    1,
+  );
   assert.equal(
     harness.calls.filter((call) => call.kind === "commit").length,
     0,
