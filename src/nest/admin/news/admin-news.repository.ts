@@ -10,7 +10,7 @@ export interface AdminNewsSummaryItem {
   excerpt: string | null;
   image_url: string | null;
   status: string;
-  published_at?: Date | string | null;
+  published_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -27,7 +27,7 @@ interface RawAdminNewsSummaryRow extends RowDataPacket {
   excerpt: string | null;
   image_url: string | null;
   status: string;
-  published_at?: Date | string | null;
+  published_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -103,9 +103,7 @@ export class AdminNewsRepository {
       excerpt: row.excerpt,
       image_url: row.image_url,
       status: row.status,
-      ...(Object.prototype.hasOwnProperty.call(row, "published_at")
-        ? { published_at: row.published_at ?? null }
-        : {}),
+      published_at: row.published_at ?? null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
@@ -131,7 +129,8 @@ export class AdminNewsRepository {
 
     const [rows] = await pool.execute<RawAdminNewsSummaryRow[]>(
       `
-        SELECT id, slug, title, excerpt, image_url, status, created_at, updated_at
+        SELECT id, slug, title, excerpt, image_url, status,
+               published_at, created_at, updated_at
         FROM news
         ORDER BY created_at DESC
         LIMIT 20
