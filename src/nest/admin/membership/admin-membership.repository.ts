@@ -397,7 +397,8 @@ export class AdminMembershipRepository {
                 suspended_at,
                 cancelled_at,
                 created_at,
-                updated_at
+                updated_at,
+                UTC_TIMESTAMP() AS now_utc
               FROM player_memberships
               WHERE id = ?
               LIMIT 1
