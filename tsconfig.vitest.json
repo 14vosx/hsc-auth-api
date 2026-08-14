@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.nest.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "strict": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/nest/**/*.ts",
+    "test/vitest/**/*.spec.ts",
+    "test/vitest/setup.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-test"
+  ]
+}

@@ -5,10 +5,13 @@
   "scripts": {
     "start": "node index.js",
     "db:migrate": "node scripts/migrate.js",
-    "test": "npm run test:legacy && npm run test:nest",
+    "test": "npm run test:legacy && npm run test:nest && npm run test:vitest:typecheck && npm run test:vitest",
     "build:nest": "tsc -p tsconfig.nest.json",
     "test:legacy": "node --test $(find test -type f -name '*.test.js' -print | sort)",
     "test:nest": "rm -rf dist-test && tsc -p tsconfig.test.json && node --test $(find dist-test/test/nest -type f -name '*.test.js' -print | sort)",
+    "test:vitest": "vitest run",
+    "test:vitest:watch": "vitest",
+    "test:vitest:typecheck": "tsc -p tsconfig.vitest.json",
     "smoke:local": "npm run build:nest && node scripts/smoke-local.js",
     "smoke:deploy": "node scripts/smoke-deploy.js",
     "preflight:deploy": "node scripts/preflight-deploy.js"
@@ -22,11 +25,18 @@
     "mysql2": "^3.18.0",
     "nodemailer": "^9.0.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "tar": "7.5.19"
   },
   "devDependencies": {
+    "@nestjs/testing": "11.1.28",
+    "@swc/core": "1.15.47",
     "@types/node": "^22.20.1",
     "@types/nodemailer": "^8.0.1",
-    "typescript": "^5.9.3"
+    "@types/supertest": "7.2.1",
+    "supertest": "7.2.2",
+    "typescript": "^5.9.3",
+    "unplugin-swc": "1.5.9",
+    "vitest": "4.1.10"
   }
 }
