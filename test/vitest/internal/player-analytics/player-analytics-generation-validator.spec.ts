@@ -2,8 +2,8 @@ import { expect, it } from "vitest";
 import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PlayerAnalyticsGenerationInvalidError } from "../../../../src/nest/internal/player-analytics/player-analytics-generation-invalid.error.js";
-import { PlayerAnalyticsGenerationValidatorService } from "../../../../src/nest/internal/player-analytics/player-analytics-generation-validator.service.js";
-import { addCompetitivePlayer, buildGeneration, GENERATED_AT, GENERATION_ID, rewriteChecksums, STEAM_ID } from "./player-analytics-generation.fixture.js";
+import { compareUtf8Binary, PlayerAnalyticsGenerationValidatorService } from "../../../../src/nest/internal/player-analytics/player-analytics-generation-validator.service.js";
+import { addCompetitivePlayer, addCompetitivePlayers, buildGeneration, type CompetitivePlayerFixture, GENERATED_AT, GENERATION_ID, rewriteChecksums, STEAM_ID } from "./player-analytics-generation.fixture.js";
 
 async function fixture(withSeason = false) {
   const parent = await mkdtemp("/tmp/hsc-player-analytics-validator-");
@@ -26,6 +26,80 @@ it("validator - aceita métricas arbitrárias contract-valid sem recalcular fór
   const f = await fixture();
   try {
     await addCompetitivePlayer(f.root);
+    await expect(f.validator.validate(f.root, GENERATION_ID)).resolves.toBeDefined();
+  } finally { await rm(f.parent, { recursive: true, force: true }); }
+});
+
+it.each([
+  ["LuanS", "✪ Super 15"],
+  ["DRS", "||¥|| MEDOC"],
+] as const)("validator - comparação UTF-8 BINARY ordena %s antes de %s", (left, right) => {
+  expect(compareUtf8Binary(left, right)).toBeLessThan(0);
+  expect(compareUtf8Binary(right, left)).toBeGreaterThan(0);
+});
+
+it.each([
+  ["LuanS", "✪ Super 15"],
+  ["DRS", "||¥|| MEDOC"],
+] as const)("validator - aceita ordering BINARY com %s antes de %s", async (left, right) => {
+  const f = await fixture();
+  try {
+    await addCompetitivePlayers(f.root, [
+      { steamid64: "76561198000000001", name: left, mapsPlayed: 2, matchesPlayed: 2 },
+      { steamid64: "76561198000000002", name: right, mapsPlayed: 2, matchesPlayed: 2 },
+    ]);
+    await expect(f.validator.validate(f.root, GENERATION_ID)).resolves.toBeDefined();
+  } finally { await rm(f.parent, { recursive: true, force: true }); }
+});
+
+it("validator - rejeita ordering localeCompare divergente de BINARY", async () => {
+  const f = await fixture();
+  try {
+    const binaryOrdered: CompetitivePlayerFixture[] = [
+      { steamid64: "76561198000000001", name: "LuanS", mapsPlayed: 2, matchesPlayed: 2 },
+      { steamid64: "76561198000000002", name: "✪ Super 15", mapsPlayed: 2, matchesPlayed: 2 },
+    ];
+    const localeOrdered = [...binaryOrdered].sort((left, right) => left.name.localeCompare(right.name));
+    expect(localeOrdered.map((player) => player.name)).not.toEqual(binaryOrdered.map((player) => player.name));
+    await addCompetitivePlayers(f.root, localeOrdered);
+    await expect(f.validator.validate(f.root, GENERATION_ID)).rejects.toMatchObject({
+      message: "players discovery ordering mismatch",
+    });
+  } finally { await rm(f.parent, { recursive: true, force: true }); }
+});
+
+it("validator - desempata nomes iguais por steamid64 BINARY", async () => {
+  const f = await fixture();
+  try {
+    await addCompetitivePlayers(f.root, [
+      { steamid64: "76561198000000001", name: "Mesmo Nome", mapsPlayed: 2, matchesPlayed: 2 },
+      { steamid64: "76561198000000002", name: "Mesmo Nome", mapsPlayed: 2, matchesPlayed: 2 },
+    ]);
+    await expect(f.validator.validate(f.root, GENERATION_ID)).resolves.toBeDefined();
+  } finally { await rm(f.parent, { recursive: true, force: true }); }
+});
+
+it("validator - rejeita steamid64 em ordem BINARY inversa no desempate final", async () => {
+  const f = await fixture();
+  try {
+    await addCompetitivePlayers(f.root, [
+      { steamid64: "76561198000000002", name: "Mesmo Nome", mapsPlayed: 2, matchesPlayed: 2 },
+      { steamid64: "76561198000000001", name: "Mesmo Nome", mapsPlayed: 2, matchesPlayed: 2 },
+    ]);
+    await expect(f.validator.validate(f.root, GENERATION_ID)).rejects.toMatchObject({
+      message: "players discovery ordering mismatch",
+    });
+  } finally { await rm(f.parent, { recursive: true, force: true }); }
+});
+
+it("validator - maps DESC e matches DESC precedem o desempate textual", async () => {
+  const f = await fixture();
+  try {
+    await addCompetitivePlayers(f.root, [
+      { steamid64: "76561198000000001", name: "✪ maps", mapsPlayed: 3, matchesPlayed: 1 },
+      { steamid64: "76561198000000002", name: "Z matches", mapsPlayed: 2, matchesPlayed: 5 },
+      { steamid64: "76561198000000003", name: "A matches", mapsPlayed: 2, matchesPlayed: 4 },
+    ]);
     await expect(f.validator.validate(f.root, GENERATION_ID)).resolves.toBeDefined();
   } finally { await rm(f.parent, { recursive: true, force: true }); }
 });
