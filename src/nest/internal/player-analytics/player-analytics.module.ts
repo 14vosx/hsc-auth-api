@@ -6,6 +6,9 @@ import { PlayerAnalyticsStatusService } from "./player-analytics-status.service.
 import { PlayerAnalyticsStorageService } from "./player-analytics-storage.service.js";
 import { MessagingModule } from "../../messaging/messaging.module.js";
 import { PlayerAnalyticsEventPublisherService } from "./player-analytics-event-publisher.service.js";
+import { PlayerAnalyticsDeliveryReceiptService } from "./player-analytics-delivery-receipt.service.js";
+import { PlayerAnalyticsGenerationValidatorService } from "./player-analytics-generation-validator.service.js";
+import { PlayerAnalyticsLifecycleService } from "./player-analytics-lifecycle.service.js";
 
 @Module({
   imports: [MessagingModule],
@@ -13,6 +16,9 @@ import { PlayerAnalyticsEventPublisherService } from "./player-analytics-event-p
   providers: [
     PlayerAnalyticsAuthService,
     PlayerAnalyticsStorageService,
+    PlayerAnalyticsDeliveryReceiptService,
+    PlayerAnalyticsGenerationValidatorService,
+    PlayerAnalyticsLifecycleService,
     PlayerAnalyticsIngestService,
     PlayerAnalyticsStatusService,
     PlayerAnalyticsEventPublisherService,

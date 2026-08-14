@@ -9,11 +9,12 @@ import { extract, Parser, type ReadEntry } from "tar";
 import { APP_CONFIG, AppConfig } from "../../core/app-config.js";
 import { PlayerAnalyticsError } from "./player-analytics-error.js";
 import { PlayerAnalyticsStorageService } from "./player-analytics-storage.service.js";
+import { PlayerAnalyticsDeliveryReceiptService } from "./player-analytics-delivery-receipt.service.js";
 
 export interface IngestResult {
   readonly ok: true;
   readonly generationId: string;
-  readonly state: "incoming";
+  readonly state: "incoming" | "accepted" | "current" | "rejected";
   readonly packageSha256: string;
   readonly packageBytes: number;
 }
@@ -48,6 +49,7 @@ export class PlayerAnalyticsIngestService {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: PlayerAnalyticsStorageService,
+    private readonly receipts: PlayerAnalyticsDeliveryReceiptService,
   ) {}
 
   get maxPackageBytes(): number {
@@ -59,41 +61,51 @@ export class PlayerAnalyticsIngestService {
     const operationId = this.storage.newOperationId();
     const uploadPath = this.storage.uploadPath(operationId);
     const extractPath = this.storage.extractPath(operationId);
-    let ownsPackage = false;
     let primaryError: unknown;
 
     await this.storage.initialize();
     try {
       const uploaded = await this.streamUpload(request, uploadPath, limits.maxPackageBytes);
       const packagePath = this.storage.packagePath(generationId);
-      const existingState = await this.storage.status(generationId);
-      const packageExists = await this.storage.exists(packagePath);
-      if (existingState === "incoming") {
-        if (!packageExists) {
-          throw new PlayerAnalyticsError(
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            "player_analytics_storage_inconsistent",
-          );
-        }
-        if (await this.storage.sha256(packagePath) !== uploaded.sha256) {
-          throw new PlayerAnalyticsError(HttpStatus.CONFLICT, "generation_id_conflict");
-        }
-        return this.result(generationId, uploaded.sha256, uploaded.bytes);
+      const existingReceipt = await this.receipts.read(generationId);
+      let existingState = await this.storage.status(generationId);
+      if (existingState === "not_found" && existingReceipt?.lifecycleState === "accepted") existingState = "accepted";
+      if (existingState === "not_found" && existingReceipt?.lifecycleState === "rejected") existingState = "rejected";
+      if (!existingReceipt && existingState !== "not_found") {
+        throw new PlayerAnalyticsError(HttpStatus.INTERNAL_SERVER_ERROR, "player_analytics_storage_inconsistent");
       }
-      if (existingState !== "not_found") {
+      let packageExists = await this.storage.exists(packagePath);
+      if (existingReceipt && !packageExists && existingState === "not_found") {
+        throw new PlayerAnalyticsError(HttpStatus.INTERNAL_SERVER_ERROR, "player_analytics_storage_inconsistent");
+      }
+      if (!existingReceipt && !packageExists) {
+        try {
+          await link(uploadPath, packagePath);
+          packageExists = true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+          packageExists = true;
+        }
+      }
+      const receipt = await this.receipts.ensure(generationId, uploaded.sha256, uploaded.bytes);
+      if (["current", "accepted", "rejected"].includes(existingState)) {
+        return this.result(generationId, existingState as IngestResult["state"], receipt);
+      }
+      if (existingState === "incoming") {
+        if (!packageExists || await this.storage.sha256(packagePath) !== uploaded.sha256) {
+          throw new PlayerAnalyticsError(HttpStatus.INTERNAL_SERVER_ERROR, "player_analytics_storage_inconsistent");
+        }
+        return this.result(generationId, "incoming", receipt);
+      }
+      if (await this.storage.sha256(packagePath) !== uploaded.sha256) {
         throw new PlayerAnalyticsError(HttpStatus.CONFLICT, "generation_id_conflict");
       }
-
-      try {
-        await link(uploadPath, packagePath);
-        ownsPackage = true;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (packageExists) {
         if (await this.storage.sha256(packagePath) !== uploaded.sha256) {
           throw new PlayerAnalyticsError(HttpStatus.CONFLICT, "generation_id_conflict");
         }
         if (await this.storage.exists(this.storage.incomingPath(generationId))) {
-          return this.result(generationId, uploaded.sha256, uploaded.bytes);
+          return this.result(generationId, "incoming", receipt);
         }
       }
 
@@ -115,7 +127,7 @@ export class PlayerAnalyticsIngestService {
           throw new PlayerAnalyticsError(HttpStatus.CONFLICT, "generation_id_conflict");
         }
       }
-      return this.result(generationId, uploaded.sha256, uploaded.bytes);
+      return this.result(generationId, "incoming", receipt);
     } catch (error) {
       primaryError = error instanceof PlayerAnalyticsError
         ? error
@@ -123,9 +135,6 @@ export class PlayerAnalyticsIngestService {
           HttpStatus.INTERNAL_SERVER_ERROR,
           "player_analytics_storage_unavailable",
         );
-      if (ownsPackage) {
-        try { await this.storage.remove(this.storage.packagePath(generationId)); } catch { /* preserve primary error */ }
-      }
       throw primaryError;
     } finally {
       let cleanupError: unknown;
@@ -254,7 +263,11 @@ export class PlayerAnalyticsIngestService {
     }
   }
 
-  private result(generationId: string, packageSha256: string, packageBytes: number): IngestResult {
-    return { ok: true, generationId, state: "incoming", packageSha256, packageBytes };
+  private result(
+    generationId: string,
+    state: IngestResult["state"],
+    receipt: { packageSha256: string; packageBytes: number },
+  ): IngestResult {
+    return { ok: true, generationId, state, packageSha256: receipt.packageSha256, packageBytes: receipt.packageBytes };
   }
 }

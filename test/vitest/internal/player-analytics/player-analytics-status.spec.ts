@@ -4,17 +4,42 @@ import path from "node:path";
 import type { AppConfig } from "../../../../src/nest/core/app-config.js";
 import { resolveWithinStorageRoot, PlayerAnalyticsStorageService } from "../../../../src/nest/internal/player-analytics/player-analytics-storage.service.js";
 import { PlayerAnalyticsStatusService } from "../../../../src/nest/internal/player-analytics/player-analytics-status.service.js";
+import { PlayerAnalyticsDeliveryReceiptService } from "../../../../src/nest/internal/player-analytics/player-analytics-delivery-receipt.service.js";
 
 const generationId = "20260814T044747694837Z-0d00de77";
 
-async function withStorage(run: (root: string, service: PlayerAnalyticsStatusService) => Promise<void>) {
+async function withStorage(run: (
+  root: string,
+  service: PlayerAnalyticsStatusService,
+  storage: PlayerAnalyticsStorageService,
+) => Promise<void>) {
   const root = await (await import("node:fs/promises")).mkdtemp("/tmp/hsc-player-analytics-status-");
   const storage = new PlayerAnalyticsStorageService({ playerAnalytics: {
     configured: true, storageRoot: root, ingestKey: "key", maxPackageBytes: 100, maxExtractedBytes: 100, maxEntries: 10,
   } } as AppConfig);
-  try { await run(root, new PlayerAnalyticsStatusService(storage)); }
+  try {
+    await run(
+      root,
+      new PlayerAnalyticsStatusService(
+        storage,
+        new PlayerAnalyticsDeliveryReceiptService(storage),
+      ),
+      storage,
+    );
+  }
   finally { await storage.remove(root); }
 }
+
+it.each(["accepted", "rejected"] as const)(
+  "status - receipt terminal preserva %s após remoção física",
+  async (lifecycleState) => withStorage(async (_root, service, storage) => {
+    await storage.initialize();
+    const receipts = new PlayerAnalyticsDeliveryReceiptService(storage);
+    await receipts.ensure(generationId, "a".repeat(64), 123);
+    await receipts.markLifecycle(generationId, lifecycleState);
+    expect((await service.get(generationId)).state).toBe(lifecycleState);
+  }),
+);
 
 for (const state of ["incoming", "accepted", "rejected"] as const) {
   it(`status - ${state}`, async () => withStorage(async (root, service) => {
