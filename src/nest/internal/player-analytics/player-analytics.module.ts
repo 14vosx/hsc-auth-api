@@ -3,22 +3,15 @@ import { PlayerAnalyticsAuthService } from "./player-analytics-auth.service.js";
 import { PlayerAnalyticsController } from "./player-analytics.controller.js";
 import { PlayerAnalyticsIngestService } from "./player-analytics-ingest.service.js";
 import { PlayerAnalyticsStatusService } from "./player-analytics-status.service.js";
-import { PlayerAnalyticsStorageService } from "./player-analytics-storage.service.js";
 import { MessagingModule } from "../../messaging/messaging.module.js";
 import { PlayerAnalyticsEventPublisherService } from "./player-analytics-event-publisher.service.js";
-import { PlayerAnalyticsDeliveryReceiptService } from "./player-analytics-delivery-receipt.service.js";
-import { PlayerAnalyticsGenerationValidatorService } from "./player-analytics-generation-validator.service.js";
-import { PlayerAnalyticsLifecycleService } from "./player-analytics-lifecycle.service.js";
+import { PlayerAnalyticsOwnershipModule } from "./player-analytics-ownership.module.js";
 
 @Module({
-  imports: [MessagingModule],
+  imports: [MessagingModule, PlayerAnalyticsOwnershipModule],
   controllers: [PlayerAnalyticsController],
   providers: [
     PlayerAnalyticsAuthService,
-    PlayerAnalyticsStorageService,
-    PlayerAnalyticsDeliveryReceiptService,
-    PlayerAnalyticsGenerationValidatorService,
-    PlayerAnalyticsLifecycleService,
     PlayerAnalyticsIngestService,
     PlayerAnalyticsStatusService,
     PlayerAnalyticsEventPublisherService,

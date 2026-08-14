@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { connect, type Options, type Replies } from "amqplib";
+import { connect, type ConsumeMessage, type Options, type Replies } from "amqplib";
 
 interface RabbitMqEventSource {
   on(event: "error", listener: (error: Error) => void): this;
@@ -36,9 +36,34 @@ export interface RabbitMqConnectionPort extends RabbitMqEventSource {
   close(): Promise<void>;
 }
 
+export interface RabbitMqConsumerChannelPort extends RabbitMqEventSource {
+  assertExchange(exchange: string, type: string, options?: Options.AssertExchange): Promise<Replies.AssertExchange>;
+  assertQueue(queue: string, options?: Options.AssertQueue): Promise<Replies.AssertQueue>;
+  bindQueue(queue: string, source: string, pattern: string): Promise<Replies.Empty>;
+  prefetch(count: number): Promise<Replies.Empty>;
+  consume(
+    queue: string,
+    listener: (message: ConsumeMessage | null) => void,
+    options: Options.Consume,
+  ): Promise<Replies.Consume>;
+  ack(message: ConsumeMessage): void;
+  reject(message: ConsumeMessage, requeue: boolean): void;
+  cancel(consumerTag: string): Promise<Replies.Empty>;
+  close(): Promise<void>;
+}
+
+export interface RabbitMqConsumerConnectionPort extends RabbitMqEventSource {
+  createChannel(): Promise<RabbitMqConsumerChannelPort>;
+  close(): Promise<void>;
+}
+
 @Injectable()
 export class RabbitMqConnectionFactory {
   connect(url: string, timeoutMs: number): Promise<RabbitMqConnectionPort> {
+    return connect(url, { timeout: timeoutMs });
+  }
+
+  connectConsumer(url: string, timeoutMs: number): Promise<RabbitMqConsumerConnectionPort> {
     return connect(url, { timeout: timeoutMs });
   }
 }
