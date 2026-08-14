@@ -1,4 +1,6 @@
 import { Injectable } from "@nestjs/common";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const STEAMID64_RE = /^\d{17}$/;
 
@@ -34,14 +36,6 @@ export type CompetitiveProfileResult =
 
 @Injectable()
 export class CompetitiveProfileService {
-  private buildProfileUrl(baseUrl: string, steamid64: string): URL {
-    const cleanBaseUrl = String(baseUrl || "").trim();
-    const withSlash = cleanBaseUrl.endsWith("/")
-      ? cleanBaseUrl
-      : `${cleanBaseUrl}/`;
-    return new URL(`player/${encodeURIComponent(steamid64)}.json`, withSlash);
-  }
-
   private sanitizeProfileValue(value: unknown): unknown {
     if (Array.isArray(value)) {
       return value.map((item) => this.sanitizeProfileValue(item));
@@ -75,12 +69,11 @@ export class CompetitiveProfileService {
   }
 
   async read(input: {
-    baseUrl: string;
-    timeoutMs: number;
+    root: string;
     steamid64: string | null;
   }): Promise<CompetitiveProfileResult> {
-    const cleanBaseUrl = String(input.baseUrl || "").trim();
-    if (!cleanBaseUrl) {
+    const cleanRoot = String(input.root || "").trim();
+    if (!cleanRoot) {
       return { ok: false, reason: "not_configured" };
     }
 
@@ -89,36 +82,26 @@ export class CompetitiveProfileService {
       return { ok: false, reason: "invalid_steamid64" };
     }
 
-    const abortController = new AbortController();
-    const cleanTimeoutMs =
-      Number.isInteger(input.timeoutMs) && input.timeoutMs > 0
-        ? input.timeoutMs
-        : 1500;
-    const timeout = setTimeout(
-      () => abortController.abort(),
-      cleanTimeoutMs,
+    const resolvedRoot = path.resolve(cleanRoot);
+    const profilePath = path.resolve(
+      resolvedRoot,
+      "competitive",
+      "player",
+      `${cleanSteamid64}.json`,
     );
+    const relativePath = path.relative(resolvedRoot, profilePath);
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      return { ok: false, reason: "unavailable" };
+    }
 
     try {
-      const response = await fetch(
-        this.buildProfileUrl(cleanBaseUrl, cleanSteamid64),
-        {
-          signal: abortController.signal,
-        },
-      );
-
-      if (response.status === 404) {
-        return { ok: false, reason: "not_found" };
-      }
-
-      if (!response.ok) {
-        return { ok: false, reason: "unavailable" };
-      }
-
       let payload: unknown;
       try {
-        payload = await response.json();
-      } catch {
+        payload = JSON.parse(await readFile(profilePath, "utf8"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return { ok: false, reason: "not_found" };
+        }
         return { ok: false, reason: "unavailable" };
       }
 
@@ -136,8 +119,6 @@ export class CompetitiveProfileService {
       return { ok: true, profile };
     } catch {
       return { ok: false, reason: "unavailable" };
-    } finally {
-      clearTimeout(timeout);
     }
   }
 }

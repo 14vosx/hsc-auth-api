@@ -21,6 +21,7 @@ const ACTIVE_SEASON = {
   start_at: "2026-06-01T00:00:00.000Z",
   end_at: "2026-09-01T00:00:00.000Z",
 };
+const SNAPSHOT_ROOT = "/var/lib/hsc-auth-api/player-analytics/accepted/generation-1";
 
 function createService(input: {
   manifestRead: (args: {
@@ -33,20 +34,23 @@ function createService(input: {
     seasonSlug: string;
     steamid64: string | null;
   }) => Promise<unknown>;
+  currentRead?: () => Promise<unknown>;
+  competitiveRead?: (args: {
+    root: string;
+    steamid64: string | null;
+  }) => Promise<unknown>;
+  getActiveSeason?: () => Promise<unknown>;
 }) {
-  const config = {
-    playerBunker: {
-      artifactRoot: "/tmp/hsc-player-bunker",
-      activeSeasonSlug: ACTIVE_SEASON.slug,
-      staticApiBaseUrl: "",
-      staticApiTimeoutMs: 1500,
-    },
+  const currentGenerationService = {
+    read: input.currentRead ?? (async () => ({
+      ok: true as const,
+      generationId: "generation-1",
+      root: SNAPSHOT_ROOT,
+    })),
   };
 
   const seasonsRepository = {
-    async getActiveSeason() {
-      return ACTIVE_SEASON;
-    },
+    getActiveSeason: input.getActiveSeason ?? (async () => ACTIVE_SEASON),
   };
 
   const manifestService = {
@@ -58,16 +62,16 @@ function createService(input: {
   };
 
   const competitiveProfileService = {
-    async read() {
+    read: input.competitiveRead ?? (async () => {
       return {
         ok: false as const,
         reason: "not_configured" as const,
       };
-    },
+    }),
   };
 
   return new PlayerBunkerSummaryService(
-    config as any,
+    currentGenerationService as any,
     seasonsRepository as any,
     manifestService as any,
     artifactService as any,
@@ -80,6 +84,109 @@ function asRecord(value: unknown): Record<string, any> {
   return value as Record<string, any>;
 }
 
+test("player bunker summary - resolves current once and shares its root across all analytics reads", async () => {
+  let currentReads = 0;
+  const roots: string[] = [];
+  let activeSeasonReads = 0;
+
+  const service = createService({
+    async currentRead() {
+      currentReads += 1;
+      return { ok: true as const, generationId: "generation-1", root: SNAPSHOT_ROOT };
+    },
+    async competitiveRead(args) {
+      roots.push(args.root);
+      return { ok: false as const, reason: "not_found" as const };
+    },
+    async getActiveSeason() {
+      activeSeasonReads += 1;
+      return ACTIVE_SEASON;
+    },
+    async manifestRead(args) {
+      roots.push(args.root);
+      return {
+        ok: true as const,
+        manifest: {
+          generatedAt: "2026-08-07T12:00:00.000Z",
+          seasonSlug: ACTIVE_SEASON.slug,
+          scope: { startAt: ACTIVE_SEASON.start_at, endAt: ACTIVE_SEASON.end_at },
+          requested: 1,
+          written: 1,
+        },
+      };
+    },
+    async artifactRead(args) {
+      roots.push(args.root);
+      return {
+        ok: true as const,
+        artifact: {
+          generatedAt: "2026-08-07T12:00:00.000Z",
+          season: { slug: ACTIVE_SEASON.slug },
+          steamid64: PLAYER.steamid64,
+          name: "Player One",
+          summary: {}, periods: {}, byMap: [], recentMaps: [], timeline: [],
+        },
+      };
+    },
+  });
+
+  const result = asRecord(await service.build(PLAYER));
+  assert.equal(currentReads, 1);
+  assert.equal(activeSeasonReads, 1);
+  assert.deepEqual(roots, [SNAPSHOT_ROOT, SNAPSHOT_ROOT, SNAPSHOT_ROOT]);
+  assert.equal(result.bunker.statsAvailable, true);
+});
+
+test("player bunker summary - missing current skips analytics readers and degrades safely", async () => {
+  let analyticsReads = 0;
+  const service = createService({
+    async currentRead() {
+      return { ok: false as const, reason: "not_found" as const };
+    },
+    async competitiveRead() {
+      analyticsReads += 1;
+      throw new Error("competitive must not be read");
+    },
+    async manifestRead() {
+      analyticsReads += 1;
+      throw new Error("manifest must not be read");
+    },
+    async artifactRead() {
+      analyticsReads += 1;
+      throw new Error("artifact must not be read");
+    },
+  });
+
+  const result = asRecord(await service.build(PLAYER));
+  assert.equal(analyticsReads, 0);
+  assert.equal(result.bunker.statsAvailable, false);
+  assert.equal(result.competitiveProfile, null);
+  assert.equal(result.currentSeason.slug, ACTIVE_SEASON.slug);
+  assert.ok(result.notes.includes("not_configured"));
+});
+
+test("player bunker summary - active season comes from DB without legacy config slug gate", async () => {
+  const dbSeason = { ...ACTIVE_SEASON, slug: "s2-2026", name: "Season 2" };
+  let manifestSeason: string | null = null;
+  const service = createService({
+    async getActiveSeason() {
+      return dbSeason;
+    },
+    async manifestRead(args) {
+      manifestSeason = args.seasonSlug;
+      return { ok: false as const, reason: "player_not_listed" as const };
+    },
+    async artifactRead() {
+      throw new Error("artifact must not be read");
+    },
+  });
+
+  const result = asRecord(await service.build(PLAYER));
+  assert.equal(manifestSeason, dbSeason.slug);
+  assert.equal(result.currentSeason.slug, dbSeason.slug);
+  assert.ok(!result.notes.includes("season_artifact_slug_mismatch"));
+});
+
 test("player bunker summary - manifest rejection prevents artifact read", async () => {
   let manifestReads = 0;
   let artifactReads = 0;
@@ -88,7 +195,7 @@ test("player bunker summary - manifest rejection prevents artifact read", async 
     async manifestRead(args) {
       manifestReads += 1;
 
-      assert.equal(args.root, "/tmp/hsc-player-bunker");
+      assert.equal(args.root, SNAPSHOT_ROOT);
       assert.equal(args.seasonSlug, ACTIVE_SEASON.slug);
       assert.equal(args.steamid64, PLAYER.steamid64);
 
@@ -204,6 +311,30 @@ test("player bunker summary - unexpected manifest error degrades safely", async 
   assert.ok(
     result.notes.includes("season_player_artifact_unavailable"),
   );
+});
+
+test("player bunker summary - season mismatch still degrades safely", async () => {
+  const service = createService({
+    async manifestRead() {
+      return {
+        ok: true as const,
+        manifest: {
+          generatedAt: "2026-08-07T12:00:00.000Z",
+          seasonSlug: ACTIVE_SEASON.slug,
+          scope: { startAt: ACTIVE_SEASON.start_at, endAt: ACTIVE_SEASON.end_at },
+          requested: 1,
+          written: 1,
+        },
+      };
+    },
+    async artifactRead() {
+      return { ok: false as const, reason: "season_mismatch" as const };
+    },
+  });
+
+  const result = asRecord(await service.build(PLAYER));
+  assert.equal(result.bunker.statsAvailable, false);
+  assert.ok(result.notes.includes("season_artifact_slug_mismatch"));
 });
 
 
