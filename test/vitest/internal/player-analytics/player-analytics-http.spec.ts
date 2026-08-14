@@ -6,6 +6,7 @@ import { PlayerAnalyticsAuthService } from "../../../../src/nest/internal/player
 import { PlayerAnalyticsController } from "../../../../src/nest/internal/player-analytics/player-analytics.controller.js";
 import { PlayerAnalyticsIngestService } from "../../../../src/nest/internal/player-analytics/player-analytics-ingest.service.js";
 import { PlayerAnalyticsStatusService } from "../../../../src/nest/internal/player-analytics/player-analytics-status.service.js";
+import { PlayerAnalyticsEventPublisherService } from "../../../../src/nest/internal/player-analytics/player-analytics-event-publisher.service.js";
 
 const generationId = "20260814T044747694837Z-0d00de77";
 const ingestResponse = {
@@ -36,6 +37,10 @@ describe("Player Analytics HTTP contract", () => {
     }),
   } satisfies Pick<PlayerAnalyticsStatusService, "get">;
 
+  const eventPublisherMock = {
+    publishGenerationReceivedBestEffort: vi.fn(),
+  } satisfies Pick<PlayerAnalyticsEventPublisherService, "publishGenerationReceivedBestEffort">;
+
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [PlayerAnalyticsController],
@@ -43,6 +48,7 @@ describe("Player Analytics HTTP contract", () => {
         { provide: PlayerAnalyticsAuthService, useValue: authMock },
         { provide: PlayerAnalyticsIngestService, useValue: ingestMock },
         { provide: PlayerAnalyticsStatusService, useValue: statusMock },
+        { provide: PlayerAnalyticsEventPublisherService, useValue: eventPublisherMock },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
@@ -66,6 +72,7 @@ describe("Player Analytics HTTP contract", () => {
     expect(response.body).toEqual(ingestResponse);
     expect(authMock.authorize).toHaveBeenCalledWith("test-key");
     expect(ingestMock.ingest).toHaveBeenCalledOnce();
+    expect(eventPublisherMock.publishGenerationReceivedBestEffort).toHaveBeenCalledWith(ingestResponse);
   });
 
   it("wires GET e retorna o status mockado", async () => {
