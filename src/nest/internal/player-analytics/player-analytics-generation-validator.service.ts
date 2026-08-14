@@ -69,6 +69,10 @@ function safeRelative(value: unknown): string {
   return value;
 }
 
+export function compareUtf8Binary(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
 interface Inventory { files: Set<string>; directories: Set<string> }
 async function inventory(root: string): Promise<Inventory> {
   const files = new Set<string>();
@@ -175,7 +179,10 @@ function discovery(value: unknown, expectedScope: Scope | null, seasonScoped: bo
     if (first > last || (seasonScoped && expectedScope && (first < expectedScope.startAt || last >= expectedScope.endAt))) invalid("discovery timestamps are invalid");
     ids.push(player.steamid64); ordering.push([-maps, -matches, player.name, player.steamid64]); return player;
   });
-  const sorted = [...ordering].sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]) || a[3].localeCompare(b[3]));
+  const sorted = [...ordering].sort((a, b) => a[0] - b[0]
+    || a[1] - b[1]
+    || compareUtf8Binary(a[2], b[2])
+    || compareUtf8Binary(a[3], b[3]));
   if (JSON.stringify(ordering) !== JSON.stringify(sorted)) invalid("players discovery ordering mismatch");
   return { ids, players: typed };
 }
