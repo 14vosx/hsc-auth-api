@@ -92,6 +92,14 @@ export interface AppConfig {
     readonly publicBaseUrl: string;
     readonly maxBytes: number;
   };
+  readonly playerAnalytics: {
+    readonly configured: boolean;
+    readonly storageRoot: string;
+    readonly ingestKey: string;
+    readonly maxPackageBytes: number;
+    readonly maxExtractedBytes: number;
+    readonly maxEntries: number;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");

@@ -11,6 +11,7 @@ import { buildDbRuntimeConfig } from "./db.js";
 import { buildSteamProfilesConfig } from "./steamProfiles.js";
 import { buildServerAccessConfig } from "./serverAccess.js";
 import { buildUploadsConfig } from "./uploads.js";
+import { buildPlayerAnalyticsConfig } from "./playerAnalytics.js";
 
 export function buildRuntimeConfig(env = process.env) {
   const port = parsePort(env.PORT, 3000, "PORT");
@@ -42,6 +43,7 @@ export function buildAppConfig(env = process.env) {
   const steamProfiles = buildSteamProfilesConfig(env);
   const serverAccess = buildServerAccessConfig(env);
   const uploads = buildUploadsConfig(env);
+  const playerAnalytics = buildPlayerAnalyticsConfig(env);
 
   return Object.freeze({
     runtime,
@@ -56,5 +58,6 @@ export function buildAppConfig(env = process.env) {
     steamProfiles,
     serverAccess,
     uploads,
+    playerAnalytics,
   });
 }
