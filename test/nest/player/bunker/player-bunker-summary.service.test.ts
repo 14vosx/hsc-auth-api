@@ -250,11 +250,43 @@ test("player bunker summary - exposes only ETL contract fields and strips nested
               cookieValue: "remove-me",
             },
           },
-          byMap: [],
-          recentMaps: [],
-          timeline: [
+          byMap: [
+            {
+              mapname: "de_mirage",
+              impactRating: 1.234,
+            },
+          ],
+          recentMaps: [
             {
               matchid: 123,
+              mapnumber: 0,
+              mapname: "de_mirage",
+              start_time: "2026-08-07T11:30:00.000Z",
+              isWin: 1,
+              result: "win",
+              outcome: "win",
+              score: "13-10",
+              kdRatio: 1.42,
+              adr: 87.3,
+              impactRating: 1.234,
+              sessionToken: "remove-me",
+            },
+          ],
+          timeline: [
+            {
+              start_time: "2026-08-07T11:30:00.000Z",
+              mapname: "de_mirage",
+              matchid: 123,
+              mapnumber: 0,
+              event: "map_completed",
+              result: "win",
+              score: "13-10",
+              kills: 20,
+              deaths: 14,
+              assists: 5,
+              kdRatio: 1.43,
+              adr: 87.3,
+              impactRating: 1.234,
               internalHash: "remove-me",
             },
           ],
@@ -270,8 +302,8 @@ test("player bunker summary - exposes only ETL contract fields and strips nested
     },
   });
 
-  const result = asRecord(await service.build(PLAYER));
-  const seasonPlayer = asRecord(result.seasonPlayer);
+  const data = asRecord(await service.build(PLAYER));
+  const seasonPlayer = asRecord(data.seasonPlayer);
 
   assert.deepEqual(
     Object.keys(seasonPlayer).sort(),
@@ -299,6 +331,50 @@ test("player bunker summary - exposes only ETL contract fields and strips nested
   assert.equal(seasonPlayer.periods.week.score, 10);
   assert.equal(seasonPlayer.periods.week.cookieValue, undefined);
 
-  assert.equal(seasonPlayer.timeline[0].matchid, 123);
-  assert.equal(seasonPlayer.timeline[0].internalHash, undefined);
+  assert.deepEqual(seasonPlayer.byMap, [
+    {
+      mapname: "de_mirage",
+      impactRating: 1.234,
+    },
+  ]);
+  assert.deepEqual(seasonPlayer.recentMaps, [
+    {
+      matchid: 123,
+      mapnumber: 0,
+      mapname: "de_mirage",
+      start_time: "2026-08-07T11:30:00.000Z",
+      isWin: 1,
+      result: "win",
+      outcome: "win",
+      score: "13-10",
+      kdRatio: 1.42,
+      adr: 87.3,
+      impactRating: 1.234,
+    },
+  ]);
+  assert.deepEqual(seasonPlayer.timeline, [
+    {
+      start_time: "2026-08-07T11:30:00.000Z",
+      mapname: "de_mirage",
+      matchid: 123,
+      mapnumber: 0,
+      event: "map_completed",
+      result: "win",
+      score: "13-10",
+      kills: 20,
+      deaths: 14,
+      assists: 5,
+      kdRatio: 1.43,
+      adr: 87.3,
+      impactRating: 1.234,
+    },
+  ]);
+  assert.equal(
+    asRecord(seasonPlayer.recentMaps[0]).sessionToken,
+    undefined,
+  );
+  assert.equal(
+    asRecord(seasonPlayer.timeline[0]).internalHash,
+    undefined,
+  );
 });

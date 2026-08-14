@@ -8,6 +8,48 @@ import { SeasonPlayerArtifactService } from "../../../../src/nest/player/bunker/
 
 const STEAMID = "76561198000000001";
 const SEASON = "s1-2026";
+const MAP_COMPLETED_AT = "2026-08-07T11:30:00.000Z";
+
+const ENRICHED_STATS = {
+  byMap: [
+    {
+      mapname: "de_mirage",
+      impactRating: 1.234,
+    },
+  ],
+  recentMaps: [
+    {
+      matchid: 123,
+      mapnumber: 0,
+      mapname: "de_mirage",
+      start_time: MAP_COMPLETED_AT,
+      isWin: 1,
+      result: "win",
+      outcome: "win",
+      score: "13-10",
+      kdRatio: 1.42,
+      adr: 87.3,
+      impactRating: 1.234,
+    },
+  ],
+  timeline: [
+    {
+      start_time: MAP_COMPLETED_AT,
+      mapname: "de_mirage",
+      matchid: 123,
+      mapnumber: 0,
+      event: "map_completed",
+      result: "win",
+      score: "13-10",
+      kills: 20,
+      deaths: 14,
+      assists: 5,
+      kdRatio: 1.43,
+      adr: 87.3,
+      impactRating: 1.234,
+    },
+  ],
+};
 
 function validArtifact(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,9 +65,7 @@ function validArtifact(overrides: Record<string, unknown> = {}) {
     name: "Player One",
     summary: {},
     periods: {},
-    byMap: [],
-    recentMaps: [],
-    timeline: [],
+    ...ENRICHED_STATS,
     ...overrides,
   };
 }
@@ -71,6 +111,15 @@ test("season player artifact - valid contract returns ok", async () => {
 
     if (result.ok) {
       assert.equal(result.artifact.steamid64, STEAMID);
+      assert.deepEqual(result.artifact.byMap, ENRICHED_STATS.byMap);
+      assert.deepEqual(
+        result.artifact.recentMaps,
+        ENRICHED_STATS.recentMaps,
+      );
+      assert.deepEqual(
+        result.artifact.timeline,
+        ENRICHED_STATS.timeline,
+      );
     }
   });
 });
