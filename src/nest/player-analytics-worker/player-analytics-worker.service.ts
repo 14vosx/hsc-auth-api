@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, type OnModuleDestroy } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../core/app-config.js";
 import { PlayerAnalyticsDeliveryReceiptService } from "../internal/player-analytics/player-analytics-delivery-receipt.service.js";
 import { PlayerAnalyticsLifecycleService } from "../internal/player-analytics/player-analytics-lifecycle.service.js";
@@ -10,24 +10,35 @@ import {
   parsePlayerAnalyticsWorkerMessage,
   PlayerAnalyticsWorkerMessageInvalidError,
 } from "./player-analytics-worker-message.js";
+import { PlayerAnalyticsReconciliationService } from "./player-analytics-reconciliation.service.js";
 
 @Injectable()
-export class PlayerAnalyticsWorkerService {
+export class PlayerAnalyticsWorkerService implements OnModuleDestroy {
+  private fatalResolve!: () => void;
+  private readonly fatal = new Promise<void>((resolve) => { this.fatalResolve = resolve; });
+
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly consumer: RabbitMqConsumerClientService,
     private readonly receipts: PlayerAnalyticsDeliveryReceiptService,
     private readonly lifecycle: PlayerAnalyticsLifecycleService,
-  ) {}
+    private readonly reconciliation: PlayerAnalyticsReconciliationService,
+  ) {
+    void this.consumer.waitForFatal().then(() => this.fatalResolve());
+    void this.reconciliation.waitForFatal().then(() => this.fatalResolve());
+  }
 
   async start(): Promise<void> {
     if (!this.config.playerAnalytics.storageRoot.trim() || !this.config.rabbitMq.configured) {
       throw new Error("Player Analytics worker configuration is incomplete");
     }
     await this.consumer.start((delivery) => this.handle(delivery));
+    await this.reconciliation.start();
   }
 
-  waitForFatal(): Promise<void> { return this.consumer.waitForFatal(); }
+  waitForFatal(): Promise<void> { return this.fatal; }
+
+  onModuleDestroy(): void { this.reconciliation.stop(); }
 
   private async handle(delivery: RabbitMqConsumerDelivery): Promise<void> {
     try {

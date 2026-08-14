@@ -35,7 +35,7 @@ it.each(["accepted", "rejected"] as const)(
   async (lifecycleState) => withStorage(async (_root, service, storage) => {
     await storage.initialize();
     const receipts = new PlayerAnalyticsDeliveryReceiptService(storage);
-    await receipts.ensure(generationId, "a".repeat(64), 123);
+    await receipts.ensure(generationId, "a".repeat(64), 123, "2026-08-14T12:00:00.000Z");
     await receipts.markLifecycle(generationId, lifecycleState);
     expect((await service.get(generationId)).state).toBe(lifecycleState);
   }),
@@ -100,3 +100,19 @@ it("status - current exige conteúdo canônico exato", async () => withStorage(a
   await writeFile(path.join(root, "current"), ` ${generationId} \n`);
   expect((await service.get(generationId)).state).toBe("not_found");
 }));
+
+it.each(["file", "symlink", "invalid-name"] as const)("storage - incoming anomaly %s é operacional", async (kind) => {
+  await withStorage(async (root, _service, storage) => {
+    await storage.initialize();
+    const target = path.join(root, "incoming", kind === "invalid-name" ? "invalid" : generationId);
+    if (kind === "file" || kind === "invalid-name") await writeFile(target, "unexpected");
+    else {
+      const outside = path.join(root, "outside");
+      await mkdir(outside);
+      await symlink(outside, target);
+    }
+    await expect(storage.listIncoming()).rejects.toMatchObject({
+      code: "player_analytics_storage_inconsistent",
+    });
+  });
+});

@@ -7,6 +7,7 @@ import { PlayerAnalyticsStorageService } from "../../../../src/nest/internal/pla
 
 const generationId = "20260814T044747694837Z-0d00de77";
 const sha = "a".repeat(64);
+const receivedAt = "2026-08-14T12:00:00.000Z";
 
 async function fixture() {
   const root = await mkdtemp("/tmp/hsc-player-analytics-receipt-");
@@ -21,8 +22,8 @@ async function fixture() {
 it("receipt - create/read, mode privado e shape estrito", async () => {
   const f = await fixture();
   try {
-    const receipt = await f.receipts.ensure(generationId, sha, 123);
-    expect(receipt).toEqual({ generationId, packageSha256: sha, packageBytes: 123, publishedAt: null, lifecycleState: "received" });
+    const receipt = await f.receipts.ensure(generationId, sha, 123, receivedAt);
+    expect(receipt).toEqual({ generationId, packageSha256: sha, packageBytes: 123, receivedAt, publishedAt: null, lifecycleState: "received" });
     expect(JSON.parse(await readFile(f.storage.deliveryPath(generationId), "utf8"))).toEqual(receipt);
     expect((await stat(f.storage.deliveryPath(generationId))).mode & 0o777).toBe(0o600);
   } finally { await rm(f.root, { recursive: true, force: true }); }
@@ -31,22 +32,23 @@ it("receipt - create/read, mode privado e shape estrito", async () => {
 it("receipt - same hash/bytes é idempotente; divergência conflita", async () => {
   const f = await fixture();
   try {
-    await f.receipts.ensure(generationId, sha, 123);
-    await expect(f.receipts.ensure(generationId, sha, 123)).resolves.toMatchObject({ lifecycleState: "received" });
-    await expect(f.receipts.ensure(generationId, "b".repeat(64), 123)).rejects.toMatchObject({ code: "generation_id_conflict" });
-    await expect(f.receipts.ensure(generationId, sha, 124)).rejects.toMatchObject({ code: "generation_id_conflict" });
+    await f.receipts.ensure(generationId, sha, 123, receivedAt);
+    await expect(f.receipts.ensure(generationId, sha, 123, "2026-08-15T00:00:00.000Z")).resolves.toMatchObject({ lifecycleState: "received", receivedAt });
+    await expect(f.receipts.ensure(generationId, "b".repeat(64), 123, receivedAt)).rejects.toMatchObject({ code: "generation_id_conflict" });
+    await expect(f.receipts.ensure(generationId, sha, 124, receivedAt)).rejects.toMatchObject({ code: "generation_id_conflict" });
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 
 it("receipt - publishedAt e lifecycle são atualizados atomicamente", async () => {
   const f = await fixture();
   try {
-    await f.receipts.ensure(generationId, sha, 123);
+    await f.receipts.ensure(generationId, sha, 123, receivedAt);
     await f.receipts.markPublished(generationId, "2026-08-14T12:34:56.789Z");
     await f.receipts.markLifecycle(generationId, "accepted");
     expect(await f.receipts.read(generationId)).toMatchObject({
       publishedAt: "2026-08-14T12:34:56.789Z",
       lifecycleState: "accepted",
+      receivedAt,
     });
     expect(await (await import("node:fs/promises")).readdir(path.join(f.root, "tmp", "metadata"))).toEqual([]);
   } finally { await rm(f.root, { recursive: true, force: true }); }
@@ -61,6 +63,20 @@ it("receipt - rejeita JSON/shape inválido e symlink", async () => {
     const outside = path.join(f.root, "outside.json");
     await writeFile(outside, "{}\n");
     await symlink(outside, f.storage.deliveryPath(generationId));
+    await expect(f.receipts.read(generationId)).rejects.toMatchObject({ code: "player_analytics_storage_inconsistent" });
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+it.each(["missing", "noncanonical"] as const)("receipt - receivedAt %s é inválido", async (kind) => {
+  const f = await fixture();
+  try {
+    const value: Record<string, unknown> = {
+      generationId, packageSha256: sha, packageBytes: 123,
+      receivedAt: "2026-08-14T12:00:00.000Z", publishedAt: null, lifecycleState: "received",
+    };
+    if (kind === "missing") delete value.receivedAt;
+    else value.receivedAt = "2026-08-14T12:00:00Z";
+    await writeFile(f.storage.deliveryPath(generationId), `${JSON.stringify(value)}\n`);
     await expect(f.receipts.read(generationId)).rejects.toMatchObject({ code: "player_analytics_storage_inconsistent" });
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });

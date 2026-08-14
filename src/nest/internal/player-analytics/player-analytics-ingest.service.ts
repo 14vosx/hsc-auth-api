@@ -87,7 +87,12 @@ export class PlayerAnalyticsIngestService {
           packageExists = true;
         }
       }
-      const receipt = await this.receipts.ensure(generationId, uploaded.sha256, uploaded.bytes);
+      const receipt = await this.receipts.ensure(
+        generationId,
+        uploaded.sha256,
+        uploaded.bytes,
+        new Date().toISOString(),
+      );
       if (["current", "accepted", "rejected"].includes(existingState)) {
         return this.result(generationId, existingState as IngestResult["state"], receipt);
       }

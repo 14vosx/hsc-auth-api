@@ -21,7 +21,7 @@ async function fixture(validator = new PlayerAnalyticsGenerationValidatorService
 
 async function received(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
   await buildGeneration(f.storage.incomingPath(GENERATION_ID));
-  await f.receipts.ensure(GENERATION_ID, "a".repeat(64), 123);
+  await f.receipts.ensure(GENERATION_ID, "a".repeat(64), 123, "2026-08-14T12:00:00.000Z");
 }
 
 it("lifecycle - valid incoming vira accepted/current e replay current é idempotente", async () => {
@@ -103,7 +103,7 @@ it("retention - preserva current e cinco accepted mais novas por generatedAt, ma
     for (const [index, id] of ids.entries()) {
       await mkdir(f.storage.acceptedPath(id), { recursive: true });
       await writeFile(path.join(f.storage.acceptedPath(id), "generation-manifest.json"), JSON.stringify({ generatedAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00Z` }));
-      await f.receipts.ensure(id, String(index).repeat(64), 100 + index);
+      await f.receipts.ensure(id, String(index).repeat(64), 100 + index, "2026-08-14T12:00:00.000Z");
       await f.receipts.markLifecycle(id, "accepted");
     }
     await f.storage.writeCurrent(ids[0]);

@@ -11,32 +11,35 @@ export interface PlayerAnalyticsDeliveryReceipt {
   readonly generationId: string;
   readonly packageSha256: string;
   readonly packageBytes: number;
+  readonly receivedAt: string;
   readonly publishedAt: string | null;
   readonly lifecycleState: PlayerAnalyticsLifecycleState;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
-const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function validTimestamp(value: unknown): value is string {
   return typeof value === "string" && UTC_TIMESTAMP.test(value)
-    && new Date(value).toISOString() === (value.includes(".") ? value : value.replace("Z", ".000Z"));
+    && new Date(value).toISOString() === value;
 }
 
 function parseReceipt(value: unknown): PlayerAnalyticsDeliveryReceipt {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error();
   const receipt = value as Record<string, unknown>;
   if (Object.keys(receipt).sort().join(",") !==
-    "generationId,lifecycleState,packageBytes,packageSha256,publishedAt") throw new Error();
+    "generationId,lifecycleState,packageBytes,packageSha256,publishedAt,receivedAt") throw new Error();
   if (typeof receipt.generationId !== "string" || !isValidGenerationId(receipt.generationId)
     || typeof receipt.packageSha256 !== "string" || !SHA256.test(receipt.packageSha256)
     || typeof receipt.packageBytes !== "number" || !Number.isSafeInteger(receipt.packageBytes) || receipt.packageBytes <= 0
+    || !validTimestamp(receipt.receivedAt)
     || (receipt.publishedAt !== null && !validTimestamp(receipt.publishedAt))
     || !["received", "accepted", "rejected"].includes(String(receipt.lifecycleState))) throw new Error();
   return {
     generationId: receipt.generationId,
     packageSha256: receipt.packageSha256,
     packageBytes: Number(receipt.packageBytes),
+    receivedAt: receipt.receivedAt,
     publishedAt: receipt.publishedAt as string | null,
     lifecycleState: receipt.lifecycleState as PlayerAnalyticsLifecycleState,
   };
@@ -64,7 +67,16 @@ export class PlayerAnalyticsDeliveryReceiptService {
     }
   }
 
-  async ensure(generationId: string, packageSha256: string, packageBytes: number): Promise<PlayerAnalyticsDeliveryReceipt> {
+  async ensure(
+    generationId: string,
+    packageSha256: string,
+    packageBytes: number,
+    receivedAt: string,
+  ): Promise<PlayerAnalyticsDeliveryReceipt> {
+    if (!validTimestamp(receivedAt)) throw new PlayerAnalyticsError(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "player_analytics_storage_inconsistent",
+    );
     return this.storage.withLifecycleLock(generationId, async () => {
       const existing = await this.read(generationId);
       if (existing) {
@@ -74,7 +86,8 @@ export class PlayerAnalyticsDeliveryReceiptService {
         return existing;
       }
       const receipt: PlayerAnalyticsDeliveryReceipt = {
-        generationId, packageSha256, packageBytes, publishedAt: null, lifecycleState: "received",
+        generationId, packageSha256, packageBytes, receivedAt,
+        publishedAt: null, lifecycleState: "received",
       };
       await this.write(receipt);
       return receipt;

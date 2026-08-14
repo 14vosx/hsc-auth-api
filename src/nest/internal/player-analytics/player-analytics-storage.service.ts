@@ -197,6 +197,28 @@ export class PlayerAnalyticsStorageService {
       .map((entry) => entry.name);
   }
 
+  async listIncoming(): Promise<string[]> {
+    const directory = this.resolve("incoming");
+    if (!await this.isRealDirectory(directory)) throw new PlayerAnalyticsError(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "player_analytics_storage_inconsistent",
+    );
+    const entries = await readdir(directory, { withFileTypes: true });
+    const generations: string[] = [];
+    for (const entry of entries) {
+      const target = this.resolve("incoming", entry.name);
+      if (!isValidGenerationId(entry.name) || !entry.isDirectory()
+        || !await this.isRealDirectory(target)) {
+        throw new PlayerAnalyticsError(
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "player_analytics_storage_inconsistent",
+        );
+      }
+      generations.push(entry.name);
+    }
+    return generations.sort();
+  }
+
   async promoteExtractIfAbsent(extractPath: string, generationId: string): Promise<boolean> {
     const containedExtractPath = this.contained(extractPath);
     const lockPath = this.resolve("tmp", "extract", `.publish-${generationId}.lock`);

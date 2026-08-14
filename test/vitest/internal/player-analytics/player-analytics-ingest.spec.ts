@@ -179,8 +179,10 @@ it("ingest - mesma generation e mesmo package é idempotente", async () => {
   try {
     const archive = await packageFrom(f, JSON.stringify({ generationId }));
     const first = await f.ingest.ingest(requestFrom(archive), generationId);
+    const originalReceivedAt = (await f.receipts.read(generationId))?.receivedAt;
     const second = await f.ingest.ingest(requestFrom(archive), generationId);
     expect(second.packageSha256).toBe(first.packageSha256);
+    expect((await f.receipts.read(generationId))?.receivedAt).toBe(originalReceivedAt);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 
@@ -202,6 +204,7 @@ it.each(["accepted", "current", "rejected"] as const)(
     try {
       const archive = await packageFrom(f, JSON.stringify({ generationId }));
       await f.ingest.ingest(requestFrom(archive), generationId);
+      const originalReceivedAt = (await f.receipts.read(generationId))?.receivedAt;
       const destination = terminalState === "rejected"
         ? f.storage.rejectedPath(generationId)
         : f.storage.acceptedPath(generationId);
@@ -209,6 +212,7 @@ it.each(["accepted", "current", "rejected"] as const)(
       await f.receipts.markLifecycle(generationId, terminalState === "rejected" ? "rejected" : "accepted");
       if (terminalState === "current") await f.storage.writeCurrent(generationId);
       expect((await f.ingest.ingest(requestFrom(archive), generationId)).state).toBe(terminalState);
+      expect((await f.receipts.read(generationId))?.receivedAt).toBe(originalReceivedAt);
     } finally { await rm(f.root, { recursive: true, force: true }); }
   },
 );
@@ -232,7 +236,7 @@ it("ingest - receipt received + staging package retoma promoção para incoming"
     await f.storage.initialize();
     await copyFile(archive, f.storage.packagePath(generationId));
     const metadata = await (await import("node:fs/promises")).stat(archive);
-    await f.receipts.ensure(generationId, await f.storage.sha256(f.storage.packagePath(generationId)), metadata.size);
+    await f.receipts.ensure(generationId, await f.storage.sha256(f.storage.packagePath(generationId)), metadata.size, "2026-08-14T12:00:00.000Z");
     expect((await f.ingest.ingest(requestFrom(archive), generationId)).state).toBe("incoming");
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
@@ -245,7 +249,7 @@ it("ingest - receipt received sem staging/incoming é falha técnica", async () 
     await f.storage.initialize();
     await copyFile(archive, f.storage.packagePath(generationId));
     const sha = await f.storage.sha256(f.storage.packagePath(generationId));
-    await f.receipts.ensure(generationId, sha, metadata.size);
+    await f.receipts.ensure(generationId, sha, metadata.size, "2026-08-14T12:00:00.000Z");
     await f.storage.remove(f.storage.packagePath(generationId));
     await expectCode(f.ingest.ingest(requestFrom(archive), generationId), "player_analytics_storage_inconsistent");
   } finally { await rm(f.root, { recursive: true, force: true }); }
@@ -276,7 +280,7 @@ it("ingest - incoming com package de mesmo hash é idempotente", async () => {
     await copyFile(archive, f.storage.packagePath(generationId));
     const packageBytes = (await (await import("node:fs/promises")).stat(archive)).size;
     const packageSha256 = await f.storage.sha256(f.storage.packagePath(generationId));
-    await f.receipts.ensure(generationId, packageSha256, packageBytes);
+    await f.receipts.ensure(generationId, packageSha256, packageBytes, "2026-08-14T12:00:00.000Z");
     const result = await f.ingest.ingest(requestFrom(archive), generationId);
     expect(result.state).toBe("incoming");
   } finally { await rm(f.root, { recursive: true, force: true }); }
@@ -289,7 +293,7 @@ it("ingest - incoming com package de hash diferente conflita", async () => {
     await f.storage.initialize();
     await mkdir(f.storage.incomingPath(generationId));
     await writeFile(f.storage.packagePath(generationId), "different-package");
-    await f.receipts.ensure(generationId, "b".repeat(64), 17);
+    await f.receipts.ensure(generationId, "b".repeat(64), 17, "2026-08-14T12:00:00.000Z");
     await expectCode(f.ingest.ingest(requestFrom(archive), generationId), "generation_id_conflict");
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });

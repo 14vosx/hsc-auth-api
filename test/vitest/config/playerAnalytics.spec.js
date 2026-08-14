@@ -13,6 +13,7 @@ describe("player analytics config", () => {
       maxPackageBytes: 33_554_432,
       maxExtractedBytes: 134_217_728,
       maxEntries: 10_000,
+      reconciliationIntervalMs: 30_000,
     });
   });
 
@@ -31,7 +32,24 @@ describe("player analytics config", () => {
       maxPackageBytes: 100,
       maxExtractedBytes: 200,
       maxEntries: 3,
+      reconciliationIntervalMs: 30_000,
     });
+  });
+
+  it.each([
+    [undefined, 30_000],
+    ["5000", 5_000],
+    ["300000", 300_000],
+  ])("reconciliation interval %s", (value, expected) => {
+    expect(buildPlayerAnalyticsConfig({
+      PLAYER_ANALYTICS_RECONCILIATION_INTERVAL_MS: value,
+    }).reconciliationIntervalMs).toBe(expected);
+  });
+
+  it.each(["4999", "300001", "invalid"])("rejeita reconciliation interval inválido %s", (value) => {
+    expect(() => buildPlayerAnalyticsConfig({
+      PLAYER_ANALYTICS_RECONCILIATION_INTERVAL_MS: value,
+    })).toThrow("PLAYER_ANALYTICS_RECONCILIATION_INTERVAL_MS");
   });
 
   it("não quebra AppConfig com configuração parcial", () => {

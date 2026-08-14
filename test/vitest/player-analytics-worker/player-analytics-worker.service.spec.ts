@@ -9,6 +9,7 @@ import {
 } from "../../../src/nest/messaging/rabbitmq-consumer-client.service.js";
 import { PLAYER_ANALYTICS_GENERATION_RECEIVED } from "../../../src/nest/messaging/rabbitmq.constants.js";
 import { PlayerAnalyticsWorkerService } from "../../../src/nest/player-analytics-worker/player-analytics-worker.service.js";
+import { PlayerAnalyticsReconciliationService } from "../../../src/nest/player-analytics-worker/player-analytics-reconciliation.service.js";
 
 const generationId = "20260814T044747694837Z-0d00de77";
 const payload = {
@@ -29,6 +30,11 @@ describe("PlayerAnalyticsWorkerService", () => {
   };
   const receipts = { read: vi.fn() };
   const lifecycle = { processGeneration: vi.fn() };
+  const reconciliation = {
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn(),
+    waitForFatal: vi.fn(() => new Promise<void>(() => undefined)),
+  };
 
   beforeEach(async () => {
     moduleRef = await Test.createTestingModule({ providers: [
@@ -37,9 +43,10 @@ describe("PlayerAnalyticsWorkerService", () => {
       { provide: RabbitMqConsumerClientService, useValue: consumer },
       { provide: PlayerAnalyticsDeliveryReceiptService, useValue: receipts },
       { provide: PlayerAnalyticsLifecycleService, useValue: lifecycle },
+      { provide: PlayerAnalyticsReconciliationService, useValue: reconciliation },
     ] }).compile();
     worker = moduleRef.get(PlayerAnalyticsWorkerService);
-    receipts.read.mockResolvedValue({ packageSha256: payload.packageSha256, packageBytes: 123 });
+    receipts.read.mockResolvedValue({ packageSha256: payload.packageSha256, packageBytes: 123, receivedAt: payload.receivedAt });
     lifecycle.processGeneration.mockResolvedValue("accepted");
     await worker.start();
   });
@@ -59,6 +66,12 @@ describe("PlayerAnalyticsWorkerService", () => {
       ack, reject,
     };
   }
+
+  it("startup inicia consumer antes da reconciliation", () => {
+    expect(consumer.start.mock.invocationCallOrder[0]).toBeLessThan(
+      reconciliation.start.mock.invocationCallOrder[0],
+    );
+  });
 
   it.each(["accepted", "current", "rejected"] as const)("ACK para lifecycle %s", async (result) => {
     lifecycle.processGeneration.mockResolvedValueOnce(result);
@@ -99,18 +112,48 @@ it.each([
   ["Rabbit", { playerAnalytics: { storageRoot: "/storage" }, rabbitMq: { configured: false } }],
   ["storageRoot", { playerAnalytics: { storageRoot: "" }, rabbitMq: { configured: true } }],
 ] as const)("startup falha sem %s", async (_label, config) => {
-  const consumer = { start: vi.fn(), waitForFatal: vi.fn() };
+  const consumer = {
+    start: vi.fn(),
+    waitForFatal: vi.fn(() => new Promise<void>(() => undefined)),
+  };
   const moduleRef = await Test.createTestingModule({ providers: [
     PlayerAnalyticsWorkerService,
     { provide: APP_CONFIG, useValue: config as AppConfig },
     { provide: RabbitMqConsumerClientService, useValue: consumer },
     { provide: PlayerAnalyticsDeliveryReceiptService, useValue: { read: vi.fn() } },
     { provide: PlayerAnalyticsLifecycleService, useValue: { processGeneration: vi.fn() } },
+    { provide: PlayerAnalyticsReconciliationService, useValue: {
+      start: vi.fn(), stop: vi.fn(), waitForFatal: vi.fn(() => new Promise<void>(() => undefined)),
+    } },
   ] }).compile();
   try {
     await expect(moduleRef.get(PlayerAnalyticsWorkerService).start()).rejects.toThrow(
       "Player Analytics worker configuration is incomplete",
     );
     expect(consumer.start).not.toHaveBeenCalled();
+  } finally { await moduleRef.close(); }
+});
+
+it.each(["consumer", "reconciliation"] as const)("startup falha em %s e respeita ordem", async (stage) => {
+  const consumer = {
+    start: stage === "consumer" ? vi.fn().mockRejectedValue(new Error("consumer")) : vi.fn().mockResolvedValue(undefined),
+    waitForFatal: vi.fn(() => new Promise<void>(() => undefined)),
+  };
+  const reconciliation = {
+    start: stage === "reconciliation" ? vi.fn().mockRejectedValue(new Error("reconciliation")) : vi.fn(),
+    stop: vi.fn(),
+    waitForFatal: vi.fn(() => new Promise<void>(() => undefined)),
+  };
+  const moduleRef = await Test.createTestingModule({ providers: [
+    PlayerAnalyticsWorkerService,
+    { provide: APP_CONFIG, useValue: { playerAnalytics: { storageRoot: "/storage" }, rabbitMq: { configured: true } } as AppConfig },
+    { provide: RabbitMqConsumerClientService, useValue: consumer },
+    { provide: PlayerAnalyticsDeliveryReceiptService, useValue: { read: vi.fn() } },
+    { provide: PlayerAnalyticsLifecycleService, useValue: { processGeneration: vi.fn() } },
+    { provide: PlayerAnalyticsReconciliationService, useValue: reconciliation },
+  ] }).compile();
+  try {
+    await expect(moduleRef.get(PlayerAnalyticsWorkerService).start()).rejects.toThrow(stage);
+    if (stage === "consumer") expect(reconciliation.start).not.toHaveBeenCalled();
   } finally { await moduleRef.close(); }
 });

@@ -36,7 +36,8 @@ describe("PlayerAnalyticsEventPublisherService", () => {
   ): Promise<T> => operation();
   const storageMock = {
     withLifecycleLock,
-  } satisfies Pick<PlayerAnalyticsStorageService, "withLifecycleLock">;
+    status: vi.fn(),
+  } satisfies Pick<PlayerAnalyticsStorageService, "withLifecycleLock" | "status">;
 
   async function configure(configured: boolean): Promise<void> {
     moduleRef = await Test.createTestingModule({
@@ -53,10 +54,12 @@ describe("PlayerAnalyticsEventPublisherService", () => {
       generationId,
       packageSha256: result.packageSha256,
       packageBytes: result.packageBytes,
+      receivedAt: "2026-08-14T12:34:56.789Z",
       publishedAt: null,
       lifecycleState: "received",
     });
     receiptMock.markPublishedWithinLock.mockResolvedValue(undefined);
+    storageMock.status.mockResolvedValue("incoming");
   }
 
   afterEach(async () => {
@@ -68,12 +71,16 @@ describe("PlayerAnalyticsEventPublisherService", () => {
   it("publica payload e AMQP properties exatos sem filesystem path", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-14T12:34:56.789Z"));
-    rabbitClientMock.publishConfirmed.mockResolvedValueOnce(undefined);
     await configure(true);
+    let signalPublished!: () => void;
+    const publishedCalled = new Promise<void>((resolve) => { signalPublished = resolve; });
+    let signalMarked!: () => void;
+    const markedCalled = new Promise<void>((resolve) => { signalMarked = resolve; });
+    rabbitClientMock.publishConfirmed.mockImplementationOnce(async () => { signalPublished(); });
+    receiptMock.markPublishedWithinLock.mockImplementationOnce(async () => { signalMarked(); });
 
     publisher.publishGenerationReceivedBestEffort(result);
-    await Promise.resolve();
-    await Promise.resolve();
+    await publishedCalled;
 
     expect(rabbitClientMock.publishConfirmed).toHaveBeenCalledOnce();
     const published = rabbitClientMock.publishConfirmed.mock.calls[0][0];
@@ -95,7 +102,7 @@ describe("PlayerAnalyticsEventPublisherService", () => {
       persistent: true,
       timestamp: Math.floor(new Date("2026-08-14T12:34:56.789Z").getTime() / 1_000),
     });
-    await Promise.resolve();
+    await markedCalled;
     expect(receiptMock.markPublishedWithinLock).toHaveBeenCalledWith(
       generationId,
       "2026-08-14T12:34:56.789Z",
@@ -125,7 +132,7 @@ describe("PlayerAnalyticsEventPublisherService", () => {
   });
 
   it.each([
-    ["already-published", { publishedAt: "2026-08-14T12:00:00Z", lifecycleState: "received" }],
+    ["already-published", { publishedAt: "2026-08-14T12:00:00.000Z", lifecycleState: "received" }],
     ["accepted", { publishedAt: null, lifecycleState: "accepted" }],
     ["rejected", { publishedAt: null, lifecycleState: "rejected" }],
   ] as const)("não republica receipt inelegível: %s", async (_label, eligibility) => {
@@ -134,6 +141,7 @@ describe("PlayerAnalyticsEventPublisherService", () => {
       generationId,
       packageSha256: result.packageSha256,
       packageBytes: result.packageBytes,
+      receivedAt: "2026-08-14T12:34:56.789Z",
       ...eligibility,
     });
     publisher.publishGenerationReceivedBestEffort(result);
@@ -148,5 +156,52 @@ describe("PlayerAnalyticsEventPublisherService", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(receiptMock.markPublishedWithinLock).not.toHaveBeenCalled();
+  });
+
+  it("operação awaitable rejeita Rabbit failure", async () => {
+    rabbitClientMock.publishConfirmed.mockRejectedValueOnce(new Error("down"));
+    await configure(true);
+    await expect(publisher.publishGenerationReceivedIfEligible(generationId)).rejects.toThrow("down");
+    expect(receiptMock.markPublishedWithinLock).not.toHaveBeenCalled();
+  });
+
+  it("operação awaitable publica e confirma antes de marcar", async () => {
+    rabbitClientMock.publishConfirmed.mockResolvedValueOnce(undefined);
+    await configure(true);
+    await expect(publisher.publishGenerationReceivedIfEligible(generationId)).resolves.toBe("published");
+    expect(rabbitClientMock.publishConfirmed.mock.invocationCallOrder[0]).toBeLessThan(
+      receiptMock.markPublishedWithinLock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("confirm seguido de falha no receipt preserva janela at-least-once", async () => {
+    rabbitClientMock.publishConfirmed.mockResolvedValueOnce(undefined);
+    await configure(true);
+    receiptMock.markPublishedWithinLock.mockRejectedValueOnce(new Error("EIO"));
+    await expect(publisher.publishGenerationReceivedIfEligible(generationId)).rejects.toThrow("EIO");
+    expect(rabbitClientMock.publishConfirmed).toHaveBeenCalledOnce();
+  });
+
+  it("não publica quando storage não está incoming", async () => {
+    await configure(true);
+    storageMock.status.mockResolvedValueOnce("accepted");
+    await expect(publisher.publishGenerationReceivedIfEligible(generationId)).resolves.toBe("not-incoming");
+    expect(rabbitClientMock.publishConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("não ressuscita DLQ quando receipt já tem publishedAt mesmo com incoming", async () => {
+    await configure(true);
+    receiptMock.read.mockResolvedValueOnce({
+      generationId,
+      packageSha256: result.packageSha256,
+      packageBytes: result.packageBytes,
+      receivedAt: "2026-08-14T12:34:56.789Z",
+      publishedAt: "2026-08-14T12:35:00.000Z",
+      lifecycleState: "received",
+    });
+    await expect(publisher.publishGenerationReceivedIfEligible(generationId))
+      .resolves.toBe("already-published");
+    expect(storageMock.status).not.toHaveBeenCalled();
+    expect(rabbitClientMock.publishConfirmed).not.toHaveBeenCalled();
   });
 });

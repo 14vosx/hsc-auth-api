@@ -23,22 +23,27 @@ export class PlayerAnalyticsEventPublisherService {
 
   publishGenerationReceivedBestEffort(result: IngestResult): void {
     if (!this.config.rabbitMq.configured || result.state !== "incoming") return;
-    void this.publishEligible(result).catch(() => {
+    void this.publishGenerationReceivedIfEligible(result.generationId).catch(() => {
       this.logger.warn("Player Analytics event publish failed");
     });
   }
 
-  private async publishEligible(result: IngestResult): Promise<void> {
-    await this.storage.withLifecycleLock(result.generationId, async () => {
-      const receipt = await this.receipts.read(result.generationId);
-      if (!receipt || receipt.publishedAt !== null || receipt.lifecycleState !== "received") return;
+  async publishGenerationReceivedIfEligible(
+    generationId: string,
+  ): Promise<"published" | "already-published" | "not-incoming" | "terminal" | "missing-receipt"> {
+    return this.storage.withLifecycleLock(generationId, async () => {
+      const receipt = await this.receipts.read(generationId);
+      if (!receipt) return "missing-receipt";
+      if (receipt.publishedAt !== null) return "already-published";
+      if (receipt.lifecycleState !== "received") return "terminal";
+      if (await this.storage.status(generationId) !== "incoming") return "not-incoming";
       const now = new Date();
       const event: PlayerAnalyticsGenerationReceivedEvent = {
         event: PLAYER_ANALYTICS_GENERATION_RECEIVED,
-        generationId: result.generationId,
-        packageSha256: result.packageSha256,
-        packageBytes: result.packageBytes,
-        receivedAt: now.toISOString(),
+        generationId: receipt.generationId,
+        packageSha256: receipt.packageSha256,
+        packageBytes: receipt.packageBytes,
+        receivedAt: receipt.receivedAt,
       };
       await this.rabbitMqClient.publishConfirmed({
         exchange: EVENTS_EXCHANGE,
@@ -47,13 +52,14 @@ export class PlayerAnalyticsEventPublisherService {
         options: {
           contentType: "application/json",
           type: PLAYER_ANALYTICS_GENERATION_RECEIVED,
-          messageId: result.generationId,
+          messageId: receipt.generationId,
           appId: "hsc-auth-api",
           persistent: true,
           timestamp: Math.floor(now.getTime() / 1_000),
         },
       });
-      await this.receipts.markPublishedWithinLock(result.generationId, now.toISOString());
+      await this.receipts.markPublishedWithinLock(generationId, now.toISOString());
+      return "published";
     });
   }
 }

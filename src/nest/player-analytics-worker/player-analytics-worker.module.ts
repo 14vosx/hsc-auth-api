@@ -1,9 +1,10 @@
 import { DynamicModule, Module } from "@nestjs/common";
 import type { AppConfig } from "../core/app-config.js";
 import { CoreConfigModule } from "../core/core-config.module.js";
-import { PlayerAnalyticsOwnershipModule } from "../internal/player-analytics/player-analytics-ownership.module.js";
+import { PlayerAnalyticsPublishingModule } from "../internal/player-analytics/player-analytics-publishing.module.js";
 import { RabbitMqConsumerModule } from "../messaging/rabbitmq-consumer.module.js";
 import { PlayerAnalyticsWorkerService } from "./player-analytics-worker.service.js";
+import { PlayerAnalyticsReconciliationService } from "./player-analytics-reconciliation.service.js";
 
 @Module({})
 export class PlayerAnalyticsWorkerModule {
@@ -12,10 +13,10 @@ export class PlayerAnalyticsWorkerModule {
       module: PlayerAnalyticsWorkerModule,
       imports: [
         CoreConfigModule.forRoot(config),
-        PlayerAnalyticsOwnershipModule,
+        PlayerAnalyticsPublishingModule,
         RabbitMqConsumerModule,
       ],
-      providers: [PlayerAnalyticsWorkerService],
+      providers: [PlayerAnalyticsReconciliationService, PlayerAnalyticsWorkerService],
     };
   }
 }
