@@ -99,6 +99,7 @@ export interface AppConfig {
     readonly maxPackageBytes: number;
     readonly maxExtractedBytes: number;
     readonly maxEntries: number;
+    readonly reconciliationIntervalMs: number;
   };
   readonly rabbitMq: {
     readonly configured: boolean;

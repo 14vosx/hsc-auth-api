@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
+    "start:player-analytics-worker": "node player-analytics-worker.js",
     "db:migrate": "node scripts/migrate.js",
     "test": "npm run test:legacy && npm run test:nest && npm run test:vitest:typecheck && npm run test:vitest",
     "build:nest": "tsc -p tsconfig.nest.json",

@@ -27,7 +27,8 @@ export class RabbitMqClientService implements OnModuleDestroy {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    private readonly connectionFactory: RabbitMqConnectionFactory,
+    @Inject(RabbitMqConnectionFactory)
+    private readonly connectionFactory: Pick<RabbitMqConnectionFactory, "connect">,
   ) {}
 
   async publishConfirmed(message: ConfirmedPublish): Promise<void> {
