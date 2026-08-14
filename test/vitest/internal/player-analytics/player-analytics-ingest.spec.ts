@@ -2,11 +2,12 @@ import { expect, it } from "vitest";
 import { createReadStream } from "node:fs";
 import { copyFile, link, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { Readable } from "node:stream";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
-import { create } from "tar";
+import { create, Header } from "tar";
 import type { IncomingMessage } from "node:http";
 import type { AppConfig } from "../../../../src/nest/core/app-config.js";
-import { archivePathIsSafe, PlayerAnalyticsIngestService } from "../../../../src/nest/internal/player-analytics/player-analytics-ingest.service.js";
+import { archiveEntryIsSafe, archivePathIsSafe, PlayerAnalyticsIngestService } from "../../../../src/nest/internal/player-analytics/player-analytics-ingest.service.js";
 import { PlayerAnalyticsStorageService } from "../../../../src/nest/internal/player-analytics/player-analytics-storage.service.js";
 import { PlayerAnalyticsDeliveryReceiptService } from "../../../../src/nest/internal/player-analytics/player-analytics-delivery-receipt.service.js";
 
@@ -66,6 +67,22 @@ async function packageFromEntries(f: Fixture, entries: string[]): Promise<string
   return target;
 }
 
+async function packageFromRoot(f: Fixture, manifest: string): Promise<string> {
+  await writeFile(path.join(f.source, "generation-manifest.json"), manifest);
+  const target = path.join(f.root, `package-root-${Math.random()}.tar.gz`);
+  await create({ cwd: f.source, file: target, gzip: true }, ["."]);
+  return target;
+}
+
+async function packageWithFileEntry(f: Fixture, entryPath: string): Promise<string> {
+  const header = new Header({ path: entryPath, type: "File", size: 0, mode: 0o600 });
+  const headerBlock = Buffer.alloc(512);
+  header.encode(headerBlock);
+  const target = path.join(f.root, `package-file-entry-${Math.random()}.tar.gz`);
+  await writeFile(target, gzipSync(Buffer.concat([headerBlock, Buffer.alloc(1024)])));
+  return target;
+}
+
 function requestFrom(target: string): IncomingMessage {
   return createReadStream(target, { highWaterMark: 7 }) as unknown as IncomingMessage;
 }
@@ -87,13 +104,55 @@ it("ingest - package válido faz streaming, produz SHA-256 e promove para incomi
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 
+it("ingest - archive canônico com entrada raiz ./ Directory promove para incoming", async () => {
+  const f = await fixture();
+  try {
+    const archive = await packageFromRoot(f, JSON.stringify({ generationId }));
+    const result = await f.ingest.ingest(requestFrom(archive), generationId);
+    expect(result.state).toBe("incoming");
+    expect(await f.storage.exists(f.storage.incomingPath(generationId))).toBe(true);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+it("ingest - entrada raiz só é segura quando é Directory", () => {
+  expect(archiveEntryIsSafe(".", "Directory")).toBe(true);
+  expect(archiveEntryIsSafe("./", "Directory")).toBe(true);
+  // O parser TAR canonicaliza uma entry terminada em "/" como Directory;
+  // por isso o caso negativo "./" não-directory é coberto diretamente aqui.
+  for (const type of ["File", "OldFile", "ContiguousFile", "SymbolicLink", "Link", "FIFO"] as const) {
+    expect(archiveEntryIsSafe(".", type)).toBe(false);
+    expect(archiveEntryIsSafe("./", type)).toBe(false);
+  }
+});
+
+it("ingest - entrada raiz . não-directory continua unsafe_archive", async () => {
+  const f = await fixture();
+  try {
+    const archive = await packageWithFileEntry(f, ".");
+    await expectCode(f.ingest.ingest(requestFrom(archive), generationId), "unsafe_archive");
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
 it("ingest - traversal e paths absolutos são rejeitados na inspeção", () => {
   expect(archivePathIsSafe("../escape.json")).toBe(false);
   expect(archivePathIsSafe("safe/../../escape.json")).toBe(false);
   expect(archivePathIsSafe("/absolute.json")).toBe(false);
   expect(archivePathIsSafe("C:\\absolute.json")).toBe(false);
   expect(archivePathIsSafe("./safe/file.json")).toBe(true);
+  expect(archiveEntryIsSafe("../escape.json", "File")).toBe(false);
+  expect(archiveEntryIsSafe("/absolute.json", "Directory")).toBe(false);
 });
+
+it.each(["../escape.json", "/absolute.json"])(
+  "ingest - archive com path inseguro %s continua unsafe_archive",
+  async (entryPath) => {
+    const f = await fixture();
+    try {
+      const archive = await packageWithFileEntry(f, entryPath);
+      await expectCode(f.ingest.ingest(requestFrom(archive), generationId), "unsafe_archive");
+    } finally { await rm(f.root, { recursive: true, force: true }); }
+  },
+);
 
 it("ingest - max package bytes e partial cleanup", async () => {
   const f = await fixture({ maxPackageBytes: 10 });
@@ -177,7 +236,7 @@ it("ingest - hardlink rejeitado", async () => {
 it("ingest - mesma generation e mesmo package é idempotente", async () => {
   const f = await fixture();
   try {
-    const archive = await packageFrom(f, JSON.stringify({ generationId }));
+    const archive = await packageFromRoot(f, JSON.stringify({ generationId }));
     const first = await f.ingest.ingest(requestFrom(archive), generationId);
     const originalReceivedAt = (await f.receipts.read(generationId))?.receivedAt;
     const second = await f.ingest.ingest(requestFrom(archive), generationId);
@@ -189,10 +248,10 @@ it("ingest - mesma generation e mesmo package é idempotente", async () => {
 it("ingest - mesma generation e package diferente conflita", async () => {
   const f = await fixture();
   try {
-    const first = await packageFrom(f, JSON.stringify({ generationId }));
+    const first = await packageFromRoot(f, JSON.stringify({ generationId }));
     await f.ingest.ingest(requestFrom(first), generationId);
     await writeFile(path.join(f.source, "different"), "content");
-    const second = await packageFrom(f, JSON.stringify({ generationId }));
+    const second = await packageFromRoot(f, JSON.stringify({ generationId }));
     await expectCode(f.ingest.ingest(requestFrom(second), generationId), "generation_id_conflict");
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
@@ -232,7 +291,7 @@ it("ingest - accepted podada permanece historicamente idempotente pelo receipt",
 it("ingest - receipt received + staging package retoma promoção para incoming", async () => {
   const f = await fixture();
   try {
-    const archive = await packageFrom(f, JSON.stringify({ generationId }));
+    const archive = await packageFromRoot(f, JSON.stringify({ generationId }));
     await f.storage.initialize();
     await copyFile(archive, f.storage.packagePath(generationId));
     const metadata = await (await import("node:fs/promises")).stat(archive);
