@@ -35,6 +35,11 @@ function isRegularType(type: string): boolean {
   return type === "File" || type === "OldFile" || type === "ContiguousFile";
 }
 
+export function archiveEntryIsSafe(input: string, type: string): boolean {
+  if (input === "." || input === "./") return type === "Directory";
+  return archivePathIsSafe(input) && (isRegularType(type) || type === "Directory");
+}
+
 const STORAGE_ERROR_CODES = new Set([
   "EACCES", "EDQUOT", "EEXIST", "EFBIG", "EIO", "EMFILE", "ENAMETOOLONG",
   "ENFILE", "ENOENT", "ENOSPC", "ENOTDIR", "EPERM", "EROFS", "ESTALE",
@@ -205,8 +210,7 @@ export class PlayerAnalyticsIngestService {
           entries += 1;
           if (entries > maxEntries) {
             validationError = new PlayerAnalyticsError(HttpStatus.BAD_REQUEST, "unsafe_archive");
-          } else if (!archivePathIsSafe(entry.path)
-            || (!isRegularType(entry.type) && entry.type !== "Directory")) {
+          } else if (!archiveEntryIsSafe(entry.path, entry.type)) {
             validationError = new PlayerAnalyticsError(HttpStatus.BAD_REQUEST, "unsafe_archive");
           } else if (isRegularType(entry.type)) {
             declaredBytes += entry.size;
