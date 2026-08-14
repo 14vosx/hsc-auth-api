@@ -7,6 +7,7 @@ import { isValidGenerationId } from "./player-analytics-contract.js";
 import { PlayerAnalyticsError } from "./player-analytics-error.js";
 import { PlayerAnalyticsIngestService } from "./player-analytics-ingest.service.js";
 import { PlayerAnalyticsStatusService } from "./player-analytics-status.service.js";
+import { PlayerAnalyticsEventPublisherService } from "./player-analytics-event-publisher.service.js";
 
 @Controller("internal/player-analytics/generations")
 export class PlayerAnalyticsController {
@@ -14,6 +15,7 @@ export class PlayerAnalyticsController {
     private readonly auth: PlayerAnalyticsAuthService,
     private readonly ingestService: PlayerAnalyticsIngestService,
     private readonly statusService: PlayerAnalyticsStatusService,
+    private readonly eventPublisher: PlayerAnalyticsEventPublisherService,
   ) {}
 
   @Put(":generationId")
@@ -36,7 +38,9 @@ export class PlayerAnalyticsController {
         && declaredLength > this.ingestService.maxPackageBytes) {
         throw new PlayerAnalyticsError(HttpStatus.PAYLOAD_TOO_LARGE, "package_too_large");
       }
-      return await this.ingestService.ingest(request, generationId);
+      const result = await this.ingestService.ingest(request, generationId);
+      this.eventPublisher.publishGenerationReceivedBestEffort(result);
+      return result;
     } catch (error) { this.rethrow(error); }
   }
 

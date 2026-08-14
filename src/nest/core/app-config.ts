@@ -100,6 +100,11 @@ export interface AppConfig {
     readonly maxExtractedBytes: number;
     readonly maxEntries: number;
   };
+  readonly rabbitMq: {
+    readonly configured: boolean;
+    readonly url: string;
+    readonly connectTimeoutMs: number;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
