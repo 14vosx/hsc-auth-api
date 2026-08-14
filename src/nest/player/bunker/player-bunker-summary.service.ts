@@ -1,5 +1,4 @@
-import { Injectable, Inject } from "@nestjs/common";
-import { AppConfig, APP_CONFIG } from "../../core/app-config.js";
+import { Injectable } from "@nestjs/common";
 import { ContentSeasonsRepository, SeasonRow } from "../../content/seasons/content-seasons.repository.js";
 import { PlayerIdentity } from "../auth/player-auth.service.js";
 import { SeasonPlayerArtifactService } from "./season-player-artifact.service.js";
@@ -8,6 +7,7 @@ import {
   SeasonPlayerManifestResult,
 } from "./season-player-manifest.service.js";
 import { CompetitiveProfileService, CompetitiveProfileResult } from "./competitive-profile.service.js";
+import { PlayerAnalyticsCurrentGenerationService } from "./player-analytics-current-generation.service.js";
 
 const SENSITIVE_ARTIFACT_KEY_RE = /(token|cookie|hash)/i;
 
@@ -26,7 +26,7 @@ const SAFE_SEASON_PLAYER_ARTIFACT_KEYS = [
 @Injectable()
 export class PlayerBunkerSummaryService {
   constructor(
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly currentGenerationService: PlayerAnalyticsCurrentGenerationService,
     private readonly seasonsRepository: ContentSeasonsRepository,
     private readonly manifestService: SeasonPlayerManifestService,
     private readonly artifactService: SeasonPlayerArtifactService,
@@ -251,13 +251,16 @@ export class PlayerBunkerSummaryService {
   }
 
   async build(player: PlayerIdentity): Promise<unknown> {
-    const bunkerConfig = this.config.playerBunker;
-
-    const competitiveProfileResult = await this.competitiveProfileService.read({
-      baseUrl: bunkerConfig.staticApiBaseUrl,
-      timeoutMs: bunkerConfig.staticApiTimeoutMs,
-      steamid64: player.steamid64,
-    });
+    const snapshot = await this.currentGenerationService.read();
+    const competitiveProfileResult: CompetitiveProfileResult = snapshot.ok
+      ? await this.competitiveProfileService.read({
+          root: snapshot.root,
+          steamid64: player.steamid64,
+        })
+      : {
+          ok: false,
+          reason: snapshot.reason === "not_found" ? "not_configured" : "unavailable",
+        };
 
     const activeSeasonState = await this.getActiveSeasonState();
     const activeSeason = activeSeasonState.activeSeason;
@@ -280,13 +283,12 @@ export class PlayerBunkerSummaryService {
       });
     }
 
-    if (
-      bunkerConfig.activeSeasonSlug &&
-      bunkerConfig.activeSeasonSlug !== activeSeason.slug
-    ) {
+    if (!snapshot.ok) {
       return this.buildFallbackData({
         player,
-        note: "season_artifact_slug_mismatch",
+        note: snapshot.reason === "not_found"
+          ? "not_configured"
+          : "season_player_artifact_unavailable",
         competitiveProfileResult,
         activeSeason,
       });
@@ -295,7 +297,7 @@ export class PlayerBunkerSummaryService {
     let manifestResult: SeasonPlayerManifestResult;
     try {
       manifestResult = await this.manifestService.read({
-        root: bunkerConfig.artifactRoot,
+        root: snapshot.root,
         seasonSlug: activeSeason.slug,
         steamid64: player.steamid64,
       });
@@ -319,7 +321,7 @@ export class PlayerBunkerSummaryService {
 
     try {
       const result = await this.artifactService.read({
-        root: bunkerConfig.artifactRoot,
+        root: snapshot.root,
         seasonSlug: activeSeason.slug,
         steamid64: player.steamid64,
       });
