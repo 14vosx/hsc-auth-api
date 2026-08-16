@@ -22,6 +22,7 @@ import { AdminSeasonsModule } from "./admin/seasons/admin-seasons.module.js";
 import { AdminMembershipModule } from "./admin/membership/admin-membership.module.js";
 import { AdminPlayerAccountsModule } from "./admin/player-accounts/admin-player-accounts.module.js";
 import { PlayerAnalyticsModule } from "./internal/player-analytics/player-analytics.module.js";
+import { MatchIngressModule } from "./internal/match/match-ingress.module.js";
 
 @Module({})
 export class AppModule {
@@ -51,6 +52,7 @@ export class AppModule {
         AdminMembershipModule,
         AdminPlayerAccountsModule,
         PlayerAnalyticsModule,
+        MatchIngressModule,
       ],
     };
   }

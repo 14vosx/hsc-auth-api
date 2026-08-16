@@ -13,6 +13,7 @@ import { buildServerAccessConfig } from "./serverAccess.js";
 import { buildUploadsConfig } from "./uploads.js";
 import { buildPlayerAnalyticsConfig } from "./playerAnalytics.js";
 import { buildRabbitMqConfig } from "./rabbitMq.js";
+import { buildMatchIngressConfig } from "./matchIngress.js";
 
 export function buildRuntimeConfig(env = process.env) {
   const port = parsePort(env.PORT, 3000, "PORT");
@@ -46,6 +47,7 @@ export function buildAppConfig(env = process.env) {
   const uploads = buildUploadsConfig(env);
   const playerAnalytics = buildPlayerAnalyticsConfig(env);
   const rabbitMq = buildRabbitMqConfig(env);
+  const matchIngress = buildMatchIngressConfig(env);
 
   return Object.freeze({
     runtime,
@@ -62,5 +64,6 @@ export function buildAppConfig(env = process.env) {
     uploads,
     playerAnalytics,
     rabbitMq,
+    matchIngress,
   });
 }
