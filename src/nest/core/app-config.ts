@@ -106,6 +106,10 @@ export interface AppConfig {
     readonly url: string;
     readonly connectTimeoutMs: number;
   };
+  readonly matchIngress: {
+    readonly configured: boolean;
+    readonly ingestKey: string;
+  };
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
