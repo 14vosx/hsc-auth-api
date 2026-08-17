@@ -4,7 +4,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 
 import { DatabaseService } from "../database/database.service.js";
 import { resolveMembershipEffectiveStatus } from "../membership/membership-status.js";
-import { MATCH_ROOM_CAPACITY, type MatchRoomSnapshot, type MatchRoomStatus } from "./match-room.contract.js";
+import { MATCH_ROOM_CAPACITY, type MatchRoomAggregateSnapshot, type MatchRoomStatus } from "./match-room.contract.js";
 import { MatchRoomError, type MatchRoomErrorCode } from "./match-room.error.js";
 
 interface EligibilityRow extends RowDataPacket { account_status: string; has_steam: number; membership_status: string | null; membership_expires_at: Date | string | null; now_utc: Date | string }
@@ -201,7 +201,7 @@ export class MatchRoomRepository {
     }); this.throwOutcome(outcome);
   }
 
-  async getById(roomId: string, viewerId: string): Promise<MatchRoomSnapshot | null> {
+  async getById(roomId: string, viewerId: string): Promise<MatchRoomAggregateSnapshot | null> {
     try { await this.reconcileRoom(roomId); } catch (error) { if (error instanceof MatchRoomError && error.code === "room_not_found") return null; throw error; }
     return this.inReadSnapshot(async (connection) => {
       const [rooms] = await connection.execute<RoomRow[]>(this.roomSelect(false), [roomId]); if (!rooms[0]) return null;
@@ -209,7 +209,7 @@ export class MatchRoomRepository {
     });
   }
 
-  async getCurrent(viewerId: string): Promise<MatchRoomSnapshot | null> {
+  async getCurrent(viewerId: string): Promise<MatchRoomAggregateSnapshot | null> {
     const [active] = await this.databaseService.getPool().execute<IdRow[]>(`SELECT room_id AS id FROM match_room_participants WHERE player_account_id = ? AND released_at IS NULL LIMIT 1`, [viewerId]);
     if (active[0]) await this.reconcileRoom(active[0].id);
     return this.inReadSnapshot(async (connection) => {
@@ -218,7 +218,7 @@ export class MatchRoomRepository {
     });
   }
 
-  async listRelevant(viewerId: string): Promise<MatchRoomSnapshot[]> {
+  async listRelevant(viewerId: string): Promise<MatchRoomAggregateSnapshot[]> {
     const [expired] = await this.databaseService.getPool().execute<IdRow[]>(`SELECT id FROM match_rooms WHERE status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)`);
     for (const row of expired) await this.reconcileRoom(row.id);
     return this.inReadSnapshot(async (connection) => {
@@ -233,7 +233,7 @@ export class MatchRoomRepository {
     return { eligible: eligibilityError === null, hasActiveRoom: Boolean(activeRows[0]?.exists_flag) };
   }
 
-  private async buildSnapshot(connection: PoolConnection, room: RoomRow, viewerId: string, context: { eligible: boolean; hasActiveRoom: boolean }): Promise<MatchRoomSnapshot> {
+  private async buildSnapshot(connection: PoolConnection, room: RoomRow, viewerId: string, context: { eligible: boolean; hasActiveRoom: boolean }): Promise<MatchRoomAggregateSnapshot> {
     const [participants] = await connection.execute<ParticipantRow[]>(`SELECT player_account_id, joined_at, confirmed_round, confirmed_at FROM match_room_participants WHERE room_id = ? AND released_at IS NULL ORDER BY joined_at ASC, id ASC`, [room.id]);
     const round = Number(room.confirmation_round);
     const participantSnapshots = participants.map((participant) => {

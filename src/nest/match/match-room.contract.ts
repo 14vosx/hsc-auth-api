@@ -1,8 +1,10 @@
+import type { PlayerPresentationReference } from "../player/presentation-reference/player-presentation-reference.contract.js";
+
 export const MATCH_ROOM_CAPACITY = 10;
 
 export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "CANCELLED";
 
-export interface MatchRoomParticipantSnapshot {
+export interface MatchRoomAggregateParticipantSnapshot {
   playerAccountId: string;
   joinedAt: Date | string;
   confirmation: {
@@ -11,7 +13,11 @@ export interface MatchRoomParticipantSnapshot {
   };
 }
 
-export interface MatchRoomSnapshot {
+export interface MatchRoomParticipantSnapshot extends MatchRoomAggregateParticipantSnapshot {
+  player: PlayerPresentationReference | null;
+}
+
+interface MatchRoomSnapshotShape<Participant> {
   room: {
     id: string;
     status: MatchRoomStatus;
@@ -26,7 +32,7 @@ export interface MatchRoomSnapshot {
       confirmedCount: number;
     } | null;
     rosterLockedAt: Date | string | null;
-    participants: MatchRoomParticipantSnapshot[];
+    participants: Participant[];
   };
   viewer: {
     participant: boolean;
@@ -39,3 +45,6 @@ export interface MatchRoomSnapshot {
     };
   };
 }
+
+export type MatchRoomAggregateSnapshot = MatchRoomSnapshotShape<MatchRoomAggregateParticipantSnapshot>;
+export type MatchRoomSnapshot = MatchRoomSnapshotShape<MatchRoomParticipantSnapshot>;

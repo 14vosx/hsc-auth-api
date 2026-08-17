@@ -24,6 +24,7 @@ import { AdminPlayerAccountsModule } from "./admin/player-accounts/admin-player-
 import { PlayerAnalyticsModule } from "./internal/player-analytics/player-analytics.module.js";
 import { MatchIngressModule } from "./internal/match/match-ingress.module.js";
 import { PlayerMatchRoomModule } from "./player/match-room/player-match-room.module.js";
+import { PlayerPresentationReferenceModule } from "./player/presentation-reference/player-presentation-reference.module.js";
 
 @Module({})
 export class AppModule {
@@ -55,6 +56,7 @@ export class AppModule {
         PlayerAnalyticsModule,
         MatchIngressModule,
         PlayerMatchRoomModule,
+        PlayerPresentationReferenceModule,
       ],
     };
   }
