@@ -16,12 +16,27 @@ const SNAPSHOT = {
 
 test("routes are player-authenticated and every mutation has CSRF and scoped throttling guards", () => {
   assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, PlayerMatchRoomController), [PlayerAuthGuard]);
-  for (const name of ["create", "join", "leave", "cancel"] as const) {
+  for (const name of ["create", "join", "leave", "cancel", "confirm"] as const) {
     const handler = PlayerMatchRoomController.prototype[name];
     assert.equal(Reflect.getMetadata(METHOD_METADATA, handler), RequestMethod.POST);
     assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, handler), [PlayerCsrfGuard, PlayerAccountThrottlerGuard]);
   }
   assert.equal(Reflect.getMetadata(PATH_METADATA, PlayerMatchRoomController), "player/match-rooms");
+});
+
+test("confirm uses the authenticated actor and preserves the mutation envelope", async () => {
+  let received: [string, string] | null = null;
+  const controller = new PlayerMatchRoomController({
+    async confirm(roomId: string, playerId: string) {
+      received = [roomId, playerId];
+      return SNAPSHOT;
+    },
+  } as any);
+  const result = await controller.confirm("room", {
+    player: PLAYER, body: { playerAccountId: "attacker" },
+  } as any);
+  assert.deepEqual(received, ["room", PLAYER.playerAccountId]);
+  assert.deepEqual(result, { ok: true, matchRoom: SNAPSHOT });
 });
 
 test("controller derives mutation actor only from PlayerAuthGuard session", async () => {

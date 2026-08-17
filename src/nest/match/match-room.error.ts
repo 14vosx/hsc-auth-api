@@ -8,6 +8,8 @@ export type MatchRoomErrorCode =
   | "creator_must_cancel_room"
   | "not_room_creator"
   | "room_not_cancellable"
+  | "room_not_confirmable"
+  | "confirmation_window_closed"
   | "steam_identity_not_linked"
   | "player_account_disabled"
   | "membership_required"

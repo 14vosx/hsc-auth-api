@@ -26,4 +26,7 @@ export class MatchRoomService {
   async cancel(roomId: string, viewerId: string): Promise<MatchRoomSnapshot> {
     await this.repository.cancel(roomId, viewerId); return this.get(roomId, viewerId);
   }
+  async confirm(roomId: string, viewerId: string): Promise<MatchRoomSnapshot> {
+    await this.repository.confirm(roomId, viewerId); return this.get(roomId, viewerId);
+  }
 }

@@ -86,9 +86,12 @@ test("join locks the room and rejects the eleventh active participant", async ()
     error instanceof MatchRoomError && error.code === "room_full");
   assert.equal(statements[0]?.includes("FOR UPDATE"), true);
   assert.equal(statements.some((sql) => sql.includes("INSERT INTO match_room_participants")), false);
-  assert.equal(statements.some((sql) =>
-    sql.includes("UPDATE match_rooms SET version = version + 1")), false);
-  assert.deepEqual(events, ["begin", "rollback", "release"]);
+  assert.equal(statements.some((sql) => sql.includes("UPDATE match_rooms")), false);
+  assert.equal(statements.some((sql) => sql.includes("UPDATE match_room_participants")), false);
+  assert.equal(statements.some((sql) => sql.includes("SET released_at")), false);
+  // Domain conflicts are materialized after the transaction outcome commits.
+  // For room_full this is a read-only/empty commit: no aggregate mutation occurred.
+  assert.deepEqual(events, ["begin", "commit", "release"]);
 });
 
 test("join accepts the tenth eligible participant and rejects inactive membership", async () => {
@@ -107,8 +110,17 @@ test("join accepts the tenth eligible participant and rejects inactive membershi
   });
   await eligibleHarness.repository.join(ROOM, PLAYER);
   assert.equal(inserted, true);
-  assert.equal(statements.filter((sql) =>
-    sql.includes("UPDATE match_rooms SET version = version + 1")).length, 1);
+  const transition = statements.find((sql) =>
+    sql.includes("UPDATE match_rooms") &&
+    sql.includes("confirmation_round = confirmation_round + 1"));
+  assert.ok(transition);
+  assert.match(transition, /status = 'CONFIRMING'/);
+  assert.match(transition, /confirmation_round = confirmation_round \+ 1/);
+  assert.match(transition, /confirmation_started_at = UTC_TIMESTAMP\(6\)/);
+  assert.match(transition, /confirmation_deadline_at = DATE_ADD/);
+  assert.match(transition, /DATE_ADD\(UTC_TIMESTAMP\(6\), INTERVAL 30 SECOND\)/);
+  assert.match(transition, /version = version \+ 1/);
+  assert.equal(statements.filter((sql) => sql.includes("version = version + 1")).length, 1);
 
   const inactiveHarness = harness(async (sql) => {
     if (sql.includes("FOR UPDATE")) return [[{
@@ -300,6 +312,7 @@ test("eligibility gates only canJoin, never safe leave/cancel capabilities", asy
 test("list computes viewer context once inside one consistent read snapshot", async () => {
   let eligibilityReads = 0;
   const { repository, queries } = harness(async (sql) => {
+    if (sql.includes("SELECT id FROM match_rooms")) return [[], []];
     if (sql.includes("SELECT DISTINCT r.id")) return [[
       { id: ROOM, creator_player_account_id: "creator", status: "FORMING", version: 1 },
       { id: "room-2", creator_player_account_id: "creator-2", status: "FORMING", version: 2 },
@@ -319,4 +332,134 @@ test("list computes viewer context once inside one consistent read snapshot", as
     "SET TRANSACTION READ ONLY",
     "START TRANSACTION WITH CONSISTENT SNAPSHOT",
   ]);
+});
+
+test("confirm records the current round once and retry is idempotent", async () => {
+  let alreadyConfirmed = false;
+  const statements: string[] = [];
+  const { repository, events } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status: "CONFIRMING", version: 3,
+      confirmation_round: 2, confirmation_started_at: "2026-08-17 12:00:00",
+      confirmation_deadline_at: "2026-08-17 12:00:30", roster_locked_at: null,
+      confirmation_expired: 0,
+    }], []];
+    if (sql.includes("SELECT confirmed_round")) return [[{
+      confirmed_round: alreadyConfirmed ? 2 : null,
+      confirmed_at: alreadyConfirmed ? "2026-08-17 12:00:10" : null,
+    }], []];
+    if (sql.includes("SET confirmed_round")) alreadyConfirmed = true;
+    if (sql.includes("COUNT(*)")) return [[{ participant_count: 1 }], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  await repository.confirm(ROOM, PLAYER);
+  const mutationsAfterFirst = statements.filter((sql) =>
+    sql.includes("SET confirmed_round") || sql.includes("version = version + 1")).length;
+  await repository.confirm(ROOM, PLAYER);
+  assert.equal(mutationsAfterFirst, 2);
+  assert.equal(statements.filter((sql) => sql.includes("SET confirmed_round")).length, 1);
+  assert.equal(statements.filter((sql) => sql.includes("UPDATE match_rooms SET version")).length, 1);
+  assert.deepEqual(events, ["begin", "commit", "release", "begin", "commit", "release"]);
+});
+
+test("the tenth current-round confirmation locks the roster with one version increment", async () => {
+  const statements: string[] = [];
+  const { repository } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status: "CONFIRMING", version: 11,
+      confirmation_round: 1, confirmation_expired: 0,
+    }], []];
+    if (sql.includes("SELECT confirmed_round")) return [[{ confirmed_round: null, confirmed_at: null }], []];
+    if (sql.includes("COUNT(*)")) return [[{ participant_count: 10 }], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  await repository.confirm(ROOM, PLAYER);
+  const transition = statements.find((sql) => sql.includes("status = 'SETUP'"));
+  assert.ok(transition);
+  assert.match(transition, /roster_locked_at = UTC_TIMESTAMP\(6\)/);
+  assert.equal(statements.filter((sql) => sql.includes("version = version + 1")).length, 1);
+});
+
+test("expired confirmation keeps confirmed roster when creator confirmed", async () => {
+  const statements: string[] = [];
+  const { repository, events } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status: "CONFIRMING", version: 8,
+      confirmation_round: 3, confirmation_expired: 1,
+    }], []];
+    if (sql.includes("SELECT EXISTS")) return [[{ exists_flag: 1 }], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  await assert.rejects(repository.confirm(ROOM, PLAYER), (error) =>
+    error instanceof MatchRoomError && error.code === "confirmation_window_closed");
+  assert.equal(statements.some((sql) => sql.includes("release_reason = 'CONFIRMATION_TIMEOUT'")), true);
+  assert.equal(statements.some((sql) => sql.includes("confirmed_round <> ?")), true);
+  assert.equal(statements.some((sql) => sql.includes("status = 'FORMING'")), true);
+  assert.equal(statements.filter((sql) => sql.includes("version = version + 1")).length, 1);
+  assert.deepEqual(events, ["begin", "commit", "release"]);
+});
+
+test("expired confirmation cancels and releases everyone when creator is pending", async () => {
+  const statements: string[] = [];
+  const { repository, events } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status: "CONFIRMING", version: 8,
+      confirmation_round: 3, confirmation_expired: 1,
+    }], []];
+    if (sql.includes("SELECT EXISTS")) return [[{ exists_flag: 0 }], []];
+    return [{ affectedRows: 1 }, []];
+  });
+  await assert.rejects(repository.confirm(ROOM, PLAYER), (error) =>
+    error instanceof MatchRoomError && error.code === "confirmation_window_closed");
+  assert.equal(statements.some((sql) => sql.includes("status = 'CANCELLED'")), true);
+  assert.equal(statements.some((sql) => sql.includes("release_reason = 'CREATOR_CONFIRMATION_TIMEOUT'")), true);
+  assert.equal(statements.filter((sql) => sql.includes("version = version + 1")).length, 1);
+  assert.deepEqual(events, ["begin", "commit", "release"]);
+});
+
+test("SETUP confirm retry is accepted only for a participant confirmed in the final round", async () => {
+  const { repository } = harness(async (sql) => {
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status: "SETUP", version: 14,
+      confirmation_round: 4, confirmation_expired: 0,
+    }], []];
+    if (sql.includes("SELECT confirmed_round")) return [[{ confirmed_round: 4, confirmed_at: "time" }], []];
+    throw new Error(`unexpected SQL: ${sql}`);
+  });
+  await repository.confirm(ROOM, PLAYER);
+});
+
+test("snapshot treats prior-round confirmation as pending and freezes roster actions", async () => {
+  let status = "CONFIRMING";
+  const { repository } = harness(async (sql) => {
+    if (sql.includes("FROM match_rooms WHERE id")) return [[{
+      id: ROOM, creator_player_account_id: "creator", status, version: 9,
+      confirmation_round: 5, confirmation_started_at: "2026-08-17 12:00:00",
+      confirmation_deadline_at: "2026-08-17 12:00:30", roster_locked_at: null,
+      confirmation_expired: 0,
+    }], []];
+    if (sql.includes("SELECT a.status")) return eligibleRows();
+    if (sql.includes("SELECT EXISTS")) return [[{ exists_flag: 1 }], []];
+    if (sql.includes("SELECT player_account_id")) return [[{
+      player_account_id: PLAYER, joined_at: "2026-08-17 11:59:00",
+      confirmed_round: 4, confirmed_at: "2026-08-17 11:59:10",
+    }], []];
+    throw new Error(`unexpected SQL: ${sql}`);
+  });
+  const confirming = await repository.getById(ROOM, PLAYER);
+  assert.equal(confirming?.room.participants[0]?.confirmation.confirmed, false);
+  assert.equal(confirming?.room.participants[0]?.confirmation.confirmedAt, null);
+  assert.equal(confirming?.viewer.actions.canJoin, false);
+  assert.equal(confirming?.viewer.actions.canLeave, false);
+  assert.equal(confirming?.viewer.actions.canConfirm, true);
+
+  status = "SETUP";
+  const setup = await repository.getById(ROOM, PLAYER);
+  assert.equal(setup?.viewer.actions.canJoin, false);
+  assert.equal(setup?.viewer.actions.canLeave, false);
+  assert.equal(setup?.viewer.actions.canConfirm, false);
 });
