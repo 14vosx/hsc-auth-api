@@ -20,6 +20,7 @@ interface MatchRoomServicePort {
   join(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   leave(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   cancel(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
+  confirm(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
 }
 
 function viewerId(request: PlayerMatchRoomRequest): string {
@@ -100,6 +101,14 @@ export class PlayerMatchRoomController {
   @Throttle({ default: { limit: 30, ttl: minutes(15) } })
   async cancel(@Param("roomId") roomId: string, @Req() request: PlayerMatchRoomRequest) {
     try { return { ok: true, matchRoom: await this.service.cancel(roomId, viewerId(request)) }; }
+    catch (error) { return mapError(error); }
+  }
+
+  @Post(":roomId/confirm")
+  @UseGuards(PlayerCsrfGuard, PlayerAccountThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: minutes(15) } })
+  async confirm(@Param("roomId") roomId: string, @Req() request: PlayerMatchRoomRequest) {
+    try { return { ok: true, matchRoom: await this.service.confirm(roomId, viewerId(request)) }; }
     catch (error) { return mapError(error); }
   }
 }
