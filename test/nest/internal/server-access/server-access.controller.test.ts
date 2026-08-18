@@ -35,6 +35,16 @@ function database(
   };
 }
 
+function contextualRepository() {
+  return {
+    async authorize() {
+      throw new Error(
+        "contextual repository should not be called by V1 tests",
+      );
+    },
+  };
+}
+
 function assertHttpError(
   error: unknown,
   status: number,
@@ -92,6 +102,7 @@ test("authorize - active membership returns HTTP business allow decision", async
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   const result =
@@ -133,6 +144,7 @@ test("authorize - business deny still returns normal decision payload", async ()
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   assert.deepEqual(
@@ -170,6 +182,7 @@ test("authorize - missing configured internal key fails closed", async () => {
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
@@ -213,6 +226,7 @@ test("authorize - invalid internal key fails before database decision", async ()
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
@@ -255,6 +269,7 @@ test("authorize - database not ready fails closed", async () => {
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
@@ -298,6 +313,7 @@ test("authorize - invalid SteamID64 is rejected before repository access", async
           };
         },
       } as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
@@ -328,6 +344,7 @@ test("authorize - expanded body is rejected", async () => {
       config() as any,
       database() as any,
       {} as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
@@ -360,6 +377,7 @@ test("authorize - repository failure is sanitized and never grants", async () =>
           );
         },
       } as any,
+      contextualRepository() as any,
     );
 
   await assert.rejects(
