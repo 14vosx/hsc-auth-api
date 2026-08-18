@@ -9,6 +9,8 @@ import {
 } from "./map-pool/match-map-pool.contract.js";
 import { validateMatchMapPoolInvariants } from "./map-pool/match-map-pool.invariants.js";
 import { MatchMapPoolRepository } from "./map-pool/match-map-pool.repository.js";
+import { CompetitiveMatchRepository } from "./competitive-match/competitive-match.repository.js";
+import { validateCompetitiveMatchSetupInvariants } from "./competitive-match/competitive-match.invariants.js";
 import {
   MATCH_ROOM_CAPACITY,
   type MatchRoomAggregateSnapshot,
@@ -25,7 +27,7 @@ import {
 import { MatchRoomError, type MatchRoomErrorCode } from "./match-room.error.js";
 
 interface EligibilityRow extends RowDataPacket { account_status: string; has_steam: number; membership_status: string | null; membership_expires_at: Date | string | null; now_utc: Date | string }
-interface RoomRow extends RowDataPacket { id: string; creator_player_account_id: string; status: MatchRoomStatus; version: string | number; confirmation_round: string | number; confirmation_started_at: Date | string | null; confirmation_deadline_at: Date | string | null; roster_locked_at: Date | string | null; confirmation_expired?: number; draft_expired?: number; veto_expired?: number }
+interface RoomRow extends RowDataPacket { id: string; creator_player_account_id: string; status: MatchRoomStatus; version: string | number; confirmation_round: string | number; confirmation_started_at: Date | string | null; confirmation_deadline_at: Date | string | null; roster_locked_at: Date | string | null; ready_at: Date | string | null; confirmation_expired?: number; draft_expired?: number; veto_expired?: number }
 interface ParticipantRow extends RowDataPacket { player_account_id: string; joined_at: Date | string; confirmed_round: string | number | null; confirmed_at: Date | string | null }
 interface CountRow extends RowDataPacket { participant_count: string | number }
 interface ExistsRow extends RowDataPacket { exists_flag: number }
@@ -87,6 +89,7 @@ export class MatchRoomRepository {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly matchMapPoolRepository: MatchMapPoolRepository,
+    private readonly competitiveMatchRepository: CompetitiveMatchRepository,
   ) {}
 
   private async inTransaction<T>(work: (connection: PoolConnection) => Promise<T>): Promise<T> {
@@ -136,7 +139,7 @@ export class MatchRoomRepository {
 
   private roomSelect(lock: boolean): string {
     return `SELECT id, creator_player_account_id, status, version,
-      confirmation_round, confirmation_started_at, confirmation_deadline_at, roster_locked_at,
+      confirmation_round, confirmation_started_at, confirmation_deadline_at, roster_locked_at, ready_at,
       (status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)) AS confirmation_expired,
       (status = 'SETUP' AND EXISTS(SELECT 1 FROM match_room_drafts d WHERE d.room_id = match_rooms.id AND d.completed_at IS NULL AND d.pick_deadline_at <= UTC_TIMESTAMP(6))) AS draft_expired,
       (status = 'SETUP' AND EXISTS(SELECT 1 FROM match_room_map_vetos v WHERE v.room_id = match_rooms.id AND v.completed_at IS NULL AND v.action_deadline_at <= UTC_TIMESTAMP(6))) AS veto_expired
@@ -230,6 +233,100 @@ export class MatchRoomRepository {
         current_vetoer_player_account_id, next_action_order, action_deadline_at
       ) VALUES (?, ?, ?, ?, 1, DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND))
     `, [roomId, pool.id, firstVetoerId, firstVetoerId]);
+  }
+
+  private async materializeCompetitiveMatchOnConnection(
+    connection: PoolConnection,
+    roomId: string,
+  ): Promise<void> {
+    const [existing] = await connection.execute<ExistsRow[]>(
+      `SELECT EXISTS(SELECT 1 FROM competitive_matches WHERE room_id = ?) AS exists_flag`,
+      [roomId],
+    );
+    if (Boolean(existing[0]?.exists_flag)) {
+      return;
+    }
+
+    const [draftRows] = await connection.execute<DraftRow[]>(
+      `SELECT completed_at FROM match_room_drafts WHERE room_id = ?`,
+      [roomId],
+    );
+    const draft = draftRows[0];
+
+    const [vetoRows] = await connection.execute<VetoRow[]>(
+      `SELECT pool_id, selected_map_key, completed_at FROM match_room_map_vetos WHERE room_id = ?`,
+      [roomId],
+    );
+    const veto = vetoRows[0];
+
+    let mapMetadata: {
+      poolId: string;
+      poolKey: string;
+      poolVersion: number;
+      mapKey: string;
+      displayName: string;
+    } | null = null;
+
+    if (veto && veto.pool_id && veto.selected_map_key) {
+      const [poolRows] = await connection.execute<RowDataPacket[]>(
+        `SELECT p.id AS pool_id, p.pool_key, p.version AS pool_version, e.map_key, e.display_name
+         FROM match_map_pools p
+         JOIN match_map_pool_entries e ON e.pool_id = p.id
+         WHERE p.id = ? AND e.map_key = ? LIMIT 1`,
+        [veto.pool_id, veto.selected_map_key],
+      );
+      const row = poolRows[0];
+      if (row) {
+        mapMetadata = {
+          poolId: row.pool_id,
+          poolKey: row.pool_key,
+          poolVersion: Number(row.pool_version),
+          mapKey: row.map_key,
+          displayName: row.display_name,
+        };
+      }
+    }
+
+    const [participants] = await connection.execute<ParticipantRow[]>(
+      `SELECT player_account_id FROM match_room_participants WHERE room_id = ? AND released_at IS NULL`,
+      [roomId],
+    );
+    const participantAccountIds = participants.map((p) => p.player_account_id);
+
+    const [assignments] = await connection.execute<AssignmentRow[]>(
+      `SELECT player_account_id, team FROM match_room_draft_assignments WHERE room_id = ?`,
+      [roomId],
+    );
+
+    const [steamRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT player_account_id, steamid64 FROM player_steam_identities
+       WHERE player_account_id IN (${participantAccountIds.map(() => "?").join(",") || "''"})`,
+      participantAccountIds,
+    );
+    const steamIdentities = steamRows.map((r) => ({
+      playerAccountId: r.player_account_id as string,
+      steamid64: r.steamid64 as string,
+    }));
+
+    const validated = validateCompetitiveMatchSetupInvariants({
+      roomStatus: "SETUP",
+      draftCompleted: draft?.completed_at !== null && draft?.completed_at !== undefined,
+      vetoCompleted: veto?.completed_at !== null && veto?.completed_at !== undefined,
+      selectedMapKey: veto?.selected_map_key ?? null,
+      mapMetadata,
+      participantAccountIds,
+      draftAssignments: assignments.map((a) => ({
+        playerAccountId: a.player_account_id,
+        team: a.team,
+      })),
+      steamIdentities,
+    });
+
+    await this.competitiveMatchRepository.createOnConnection(connection, {
+      roomId,
+      map: validated.map,
+      roster: validated.roster,
+    });
   }
 
   private async reconcileDraftLocked(connection: PoolConnection, room: RoomRow, draft: DraftRow): Promise<boolean> {
@@ -410,6 +507,8 @@ export class MatchRoomRepository {
             action_deadline_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND)
         WHERE room_id = ?
       `, [nextVetoer, room.id]);
+      await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [room.id]);
+      room.version = Number(room.version) + 1;
     } else {
       const allBanned = new Set([...bannedKeys, targetMapKey]);
       const lastMapKey = poolMapKeys.find((k) => !allBanned.has(k));
@@ -424,10 +523,13 @@ export class MatchRoomRepository {
             completed_at = UTC_TIMESTAMP(6)
         WHERE room_id = ?
       `, [lastMapKey, room.id]);
+
+      await this.materializeCompetitiveMatchOnConnection(connection, room.id);
+      await connection.execute(`UPDATE match_rooms SET status = 'READY', ready_at = UTC_TIMESTAMP(6), version = version + 1 WHERE id = ?`, [room.id]);
+      room.version = Number(room.version) + 1;
+      room.status = "READY";
     }
 
-    await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [room.id]);
-    room.version = Number(room.version) + 1;
     return true;
   }
 
@@ -453,7 +555,7 @@ export class MatchRoomRepository {
 
           await this.reconcileVetoRecoveryLocked(connection, room);
 
-          if (Boolean(room.veto_expired)) {
+          if (room.status === "SETUP" && Boolean(room.veto_expired)) {
             const [vetoRows] = await connection.execute<VetoRow[]>(`
               SELECT room_id, pool_id, first_vetoer_player_account_id,
                 current_vetoer_player_account_id, next_action_order,
@@ -463,6 +565,33 @@ export class MatchRoomRepository {
             `, [roomId]);
             if (vetoRows[0] && Boolean(vetoRows[0].veto_expired)) {
               await this.reconcileVetoTimeoutLocked(connection, room, vetoRows[0]);
+            }
+          }
+
+          if (room.status === "SETUP") {
+            const [draftRows] = await connection.execute<DraftRow[]>(`
+              SELECT completed_at FROM match_room_drafts WHERE room_id = ?
+            `, [roomId]);
+            const [vetoRows] = await connection.execute<VetoRow[]>(`
+              SELECT completed_at FROM match_room_map_vetos WHERE room_id = ?
+            `, [roomId]);
+
+            if (draftRows[0]?.completed_at !== null && draftRows[0]?.completed_at !== undefined &&
+                vetoRows[0]?.completed_at !== null && vetoRows[0]?.completed_at !== undefined) {
+              const [matchRows] = await connection.execute<ExistsRow[]>(`
+                SELECT EXISTS(SELECT 1 FROM competitive_matches WHERE room_id = ?) AS exists_flag
+              `, [roomId]);
+
+              if (!Boolean(matchRows[0]?.exists_flag)) {
+                await this.materializeCompetitiveMatchOnConnection(connection, roomId);
+                await connection.execute(`UPDATE match_rooms SET status = 'READY', ready_at = UTC_TIMESTAMP(6), version = version + 1 WHERE id = ?`, [roomId]);
+                room.version = Number(room.version) + 1;
+                room.status = "READY";
+              } else {
+                await connection.execute(`UPDATE match_rooms SET status = 'READY', ready_at = COALESCE(ready_at, UTC_TIMESTAMP(6)), version = version + 1 WHERE id = ?`, [roomId]);
+                room.version = Number(room.version) + 1;
+                room.status = "READY";
+              }
             }
           }
         }
@@ -535,7 +664,7 @@ export class MatchRoomRepository {
   async confirm(roomId: string, playerAccountId: string): Promise<void> {
     const outcome = await this.inTransaction<MutationOutcome>(async (connection) => {
       const room = await this.lockRoom(connection, roomId);
-      if (room.status === "SETUP") {
+      if (room.status === "SETUP" || room.status === "READY") {
         const [rows] = await connection.execute<ConfirmationRow[]>(`SELECT confirmed_round, confirmed_at FROM match_room_participants WHERE room_id = ? AND player_account_id = ? AND released_at IS NULL LIMIT 1`, [roomId, playerAccountId]);
         return Number(rows[0]?.confirmed_round) === Number(room.confirmation_round) ? {} : { error: "room_not_confirmable" };
       }
@@ -731,6 +860,7 @@ export class MatchRoomRepository {
               action_deadline_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND)
           WHERE room_id = ?
         `, [nextVetoer, roomId]);
+        await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [roomId]);
       } else {
         const bannedKeys = new Set([...actionRows.map((a) => a.map_key), mapKey]);
         const lastMapKey = poolMapKeys.find((k) => !bannedKeys.has(k));
@@ -745,9 +875,11 @@ export class MatchRoomRepository {
               completed_at = UTC_TIMESTAMP(6)
           WHERE room_id = ?
         `, [lastMapKey, roomId]);
+
+        await this.materializeCompetitiveMatchOnConnection(connection, roomId);
+        await connection.execute(`UPDATE match_rooms SET status = 'READY', ready_at = UTC_TIMESTAMP(6), version = version + 1 WHERE id = ?`, [roomId]);
       }
 
-      await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [roomId]);
       return {};
     });
 
@@ -767,7 +899,7 @@ export class MatchRoomRepository {
     const [active] = await this.databaseService.getPool().execute<IdRow[]>(`SELECT room_id AS id FROM match_room_participants WHERE player_account_id = ? AND released_at IS NULL LIMIT 1`, [viewerId]);
     if (active[0]) await this.reconcileRoom(active[0].id);
     return this.inReadSnapshot(async (connection) => {
-      const [rooms] = await connection.execute<RoomRow[]>(`SELECT r.id, r.creator_player_account_id, r.status, r.version, r.confirmation_round, r.confirmation_started_at, r.confirmation_deadline_at, r.roster_locked_at, 0 AS confirmation_expired FROM match_room_participants p JOIN match_rooms r ON r.id = p.room_id WHERE p.player_account_id = ? AND p.released_at IS NULL LIMIT 1`, [viewerId]);
+      const [rooms] = await connection.execute<RoomRow[]>(`SELECT r.id, r.creator_player_account_id, r.status, r.version, r.confirmation_round, r.confirmation_started_at, r.confirmation_deadline_at, r.roster_locked_at, r.ready_at, 0 AS confirmation_expired FROM match_room_participants p JOIN match_rooms r ON r.id = p.room_id WHERE p.player_account_id = ? AND p.released_at IS NULL LIMIT 1`, [viewerId]);
       if (!rooms[0]) return null; return this.buildSnapshot(connection, rooms[0], viewerId, await this.readViewerContext(connection, viewerId));
     });
   }
@@ -788,7 +920,7 @@ export class MatchRoomRepository {
     `);
     for (const row of expiredVetos) await this.reconcileRoom(row.id);
     return this.inReadSnapshot(async (connection) => {
-      const [rooms] = await connection.execute<RoomRow[]>(`SELECT DISTINCT r.id, r.creator_player_account_id, r.status, r.version, r.confirmation_round, r.confirmation_started_at, r.confirmation_deadline_at, r.roster_locked_at, 0 AS confirmation_expired FROM match_rooms r LEFT JOIN match_room_participants p ON p.room_id = r.id AND p.player_account_id = ? AND p.released_at IS NULL WHERE r.status = 'FORMING' OR p.id IS NOT NULL ORDER BY r.created_at ASC, r.id ASC`, [viewerId]);
+      const [rooms] = await connection.execute<RoomRow[]>(`SELECT DISTINCT r.id, r.creator_player_account_id, r.status, r.version, r.confirmation_round, r.confirmation_started_at, r.confirmation_deadline_at, r.roster_locked_at, r.ready_at, 0 AS confirmation_expired FROM match_rooms r LEFT JOIN match_room_participants p ON p.room_id = r.id AND p.player_account_id = ? AND p.released_at IS NULL WHERE r.status = 'FORMING' OR p.id IS NOT NULL ORDER BY r.created_at ASC, r.id ASC`, [viewerId]);
       const context = await this.readViewerContext(connection, viewerId); return Promise.all(rooms.map((room) => this.buildSnapshot(connection, room, viewerId, context)));
     });
   }
@@ -817,7 +949,7 @@ export class MatchRoomRepository {
     let mapVetoSnapshot: MatchRoomMapVetoSnapshot | null = null;
     let canMapVetoBan = false;
 
-    if (room.status === "SETUP" || room.status === "CANCELLED") {
+    if (room.status === "SETUP" || room.status === "READY" || room.status === "CANCELLED") {
       const [draftRows] = await connection.execute<DraftRow[]>(`
         SELECT captain_a_player_account_id, captain_b_player_account_id,
           first_picker_player_account_id, current_picker_player_account_id,
@@ -951,10 +1083,12 @@ export class MatchRoomRepository {
       }
     }
 
+    const competitiveMatchSnapshot = await this.competitiveMatchRepository.findByRoomIdOnConnection(connection, room.id);
+
     return {
       room: { id: room.id, status: room.status, version: Number(room.version), creator: { playerAccountId: room.creator_player_account_id }, participantCount: participants.length, capacity: MATCH_ROOM_CAPACITY,
         confirmation: confirming && room.confirmation_started_at && room.confirmation_deadline_at ? { round, startedAt: room.confirmation_started_at, deadlineAt: room.confirmation_deadline_at, confirmedCount } : null,
-        rosterLockedAt: room.roster_locked_at, draft: draftSnapshot, mapVeto: mapVetoSnapshot, participants: participantSnapshots },
+        rosterLockedAt: room.roster_locked_at, readyAt: room.ready_at, draft: draftSnapshot, mapVeto: mapVetoSnapshot, competitiveMatch: competitiveMatchSnapshot, participants: participantSnapshots },
       viewer: { participant: viewerParticipant, creator: viewerCreator, actions: {
         canJoin: forming && context.eligible && !context.hasActiveRoom && participants.length < MATCH_ROOM_CAPACITY,
         canLeave: forming && viewerParticipant && !viewerCreator,
