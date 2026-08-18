@@ -1,5 +1,5 @@
 import {
-  Controller, Get, HttpException, HttpStatus, Inject, Param, Post, Req, UseGuards,
+  Body, Controller, Get, HttpException, HttpStatus, Inject, Param, Post, Req, UseGuards,
 } from "@nestjs/common";
 import { Throttle, minutes } from "@nestjs/throttler";
 
@@ -21,6 +21,7 @@ interface MatchRoomServicePort {
   leave(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   cancel(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   confirm(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
+  draftPick(roomId: string, viewerId: string, targetPlayerAccountId: string): Promise<MatchRoomSnapshot>;
 }
 
 function viewerId(request: PlayerMatchRoomRequest): string {
@@ -29,10 +30,26 @@ function viewerId(request: PlayerMatchRoomRequest): string {
   return id;
 }
 
+function validateDraftPickBody(body: unknown): { ok: true; targetPlayerAccountId: string } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "invalid_body" };
+  }
+  const keys = Object.keys(body);
+  if (keys.length !== 1 || !("playerAccountId" in body)) {
+    return { ok: false, error: "invalid_body" };
+  }
+  const targetId = (body as Record<string, unknown>).playerAccountId;
+  if (typeof targetId !== "string" || targetId.trim() === "") {
+    return { ok: false, error: "invalid_body" };
+  }
+  return { ok: true, targetPlayerAccountId: targetId.trim() };
+}
+
 const FORBIDDEN_ERRORS = new Set<MatchRoomErrorCode>([
   "steam_identity_not_linked", "player_account_disabled", "membership_required",
   "membership_inactive", "membership_suspended", "membership_expired",
   "membership_cancelled", "not_room_participant", "creator_must_cancel_room", "not_room_creator",
+  "not_draft_picker",
 ]);
 
 function mapError(error: unknown): never {
@@ -110,5 +127,22 @@ export class PlayerMatchRoomController {
   async confirm(@Param("roomId") roomId: string, @Req() request: PlayerMatchRoomRequest) {
     try { return { ok: true, matchRoom: await this.service.confirm(roomId, viewerId(request)) }; }
     catch (error) { return mapError(error); }
+  }
+
+  @Post(":roomId/draft/pick")
+  @UseGuards(PlayerCsrfGuard, PlayerAccountThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: minutes(15) } })
+  async draftPick(
+    @Param("roomId") roomId: string,
+    @Body() body: unknown,
+    @Req() request: PlayerMatchRoomRequest,
+  ) {
+    const validation = validateDraftPickBody(body);
+    if (!validation.ok) {
+      throw new HttpException({ ok: false, error: validation.error }, HttpStatus.BAD_REQUEST);
+    }
+    try {
+      return { ok: true, matchRoom: await this.service.draftPick(roomId, viewerId(request), validation.targetPlayerAccountId) };
+    } catch (error) { return mapError(error); }
   }
 }

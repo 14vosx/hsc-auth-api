@@ -69,4 +69,9 @@ export class MatchRoomService {
     await this.repository.confirm(roomId, viewerId);
     return this.get(roomId, viewerId);
   }
+
+  async draftPick(roomId: string, viewerId: string, targetPlayerAccountId: string): Promise<MatchRoomSnapshot> {
+    await this.repository.draftPick(roomId, viewerId, targetPlayerAccountId);
+    return this.get(roomId, viewerId);
+  }
 }

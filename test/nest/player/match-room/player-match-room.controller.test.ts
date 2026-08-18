@@ -7,16 +7,17 @@ import { PlayerAuthGuard } from "../../../../src/nest/player/auth/player-auth.gu
 import { PlayerCsrfGuard } from "../../../../src/nest/player/security/player-csrf.guard.js";
 import { PlayerAccountThrottlerGuard } from "../../../../src/nest/player/security/player-account-throttler.guard.js";
 import { PlayerMatchRoomController } from "../../../../src/nest/player/match-room/player-match-room.controller.js";
+import { MatchRoomError } from "../../../../src/nest/match/match-room.error.js";
 
 const PLAYER = { playerAccountId: "11111111-1111-4111-8111-111111111111" } as any;
 const SNAPSHOT = {
   room: { id: "room", status: "FORMING", version: 1, creator: { playerAccountId: PLAYER.playerAccountId }, participantCount: 1, capacity: 10, participants: [] },
-  viewer: { participant: true, creator: true, actions: { canJoin: false, canLeave: false, canCancel: true } },
+  viewer: { participant: true, creator: true, actions: { canJoin: false, canLeave: false, canCancel: true, canDraftPick: false } },
 } as any;
 
 test("routes are player-authenticated and every mutation has CSRF and scoped throttling guards", () => {
   assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, PlayerMatchRoomController), [PlayerAuthGuard]);
-  for (const name of ["create", "join", "leave", "cancel", "confirm"] as const) {
+  for (const name of ["create", "join", "leave", "cancel", "confirm", "draftPick"] as const) {
     const handler = PlayerMatchRoomController.prototype[name];
     assert.equal(Reflect.getMetadata(METHOD_METADATA, handler), RequestMethod.POST);
     assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, handler), [PlayerCsrfGuard, PlayerAccountThrottlerGuard]);
@@ -79,4 +80,47 @@ test("missing authenticated player identity stays a sanitized 401", async () => 
     assert.equal((error.getResponse() as any).error, "invalid_session");
     return true;
   });
+});
+
+test("draftPick validates body, enforces guards, and maps errors", async () => {
+  let received: [string, string, string] | null = null;
+  const controller = new PlayerMatchRoomController({
+    async draftPick(roomId: string, viewerId: string, targetId: string) {
+      if (targetId === "forbidden") throw new MatchRoomError("not_draft_picker");
+      if (targetId === "conflict") throw new MatchRoomError("draft_target_not_available");
+      received = [roomId, viewerId, targetId];
+      return SNAPSHOT;
+    },
+  } as any);
+
+  // Invalid body (missing or extra keys)
+  await assert.rejects(
+    controller.draftPick("room", {}, { player: PLAYER } as any),
+    (error: any) => error instanceof HttpException && error.getStatus() === 400,
+  );
+  await assert.rejects(
+    controller.draftPick("room", { playerAccountId: "p1", extra: true }, { player: PLAYER } as any),
+    (error: any) => error instanceof HttpException && error.getStatus() === 400,
+  );
+
+  // 403 Forbidden mapping for not_draft_picker
+  await assert.rejects(
+    controller.draftPick("room", { playerAccountId: "forbidden" }, { player: PLAYER } as any),
+    (error: any) => error instanceof HttpException && error.getStatus() === 403,
+  );
+
+  // 409 Conflict mapping for draft_target_not_available
+  await assert.rejects(
+    controller.draftPick("room", { playerAccountId: "conflict" }, { player: PLAYER } as any),
+    (error: any) => error instanceof HttpException && error.getStatus() === 409,
+  );
+
+  // Success
+  const result = await controller.draftPick(
+    "room",
+    { playerAccountId: "target-123" },
+    { player: PLAYER } as any,
+  );
+  assert.deepEqual(received, ["room", PLAYER.playerAccountId, "target-123"]);
+  assert.deepEqual(result, { ok: true, matchRoom: SNAPSHOT });
 });
