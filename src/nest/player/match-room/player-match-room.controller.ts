@@ -22,6 +22,7 @@ interface MatchRoomServicePort {
   cancel(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   confirm(roomId: string, viewerId: string): Promise<MatchRoomSnapshot>;
   draftPick(roomId: string, viewerId: string, targetPlayerAccountId: string): Promise<MatchRoomSnapshot>;
+  mapVetoBan(roomId: string, viewerId: string, mapKey: string): Promise<MatchRoomSnapshot>;
 }
 
 function viewerId(request: PlayerMatchRoomRequest): string {
@@ -45,11 +46,26 @@ function validateDraftPickBody(body: unknown): { ok: true; targetPlayerAccountId
   return { ok: true, targetPlayerAccountId: targetId.trim() };
 }
 
+function validateMapVetoBanBody(body: unknown): { ok: true; mapKey: string } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "invalid_body" };
+  }
+  const keys = Object.keys(body);
+  if (keys.length !== 1 || !("mapKey" in body)) {
+    return { ok: false, error: "invalid_body" };
+  }
+  const mapKey = (body as Record<string, unknown>).mapKey;
+  if (typeof mapKey !== "string" || mapKey.trim() === "") {
+    return { ok: false, error: "invalid_body" };
+  }
+  return { ok: true, mapKey: mapKey.trim() };
+}
+
 const FORBIDDEN_ERRORS = new Set<MatchRoomErrorCode>([
   "steam_identity_not_linked", "player_account_disabled", "membership_required",
   "membership_inactive", "membership_suspended", "membership_expired",
   "membership_cancelled", "not_room_participant", "creator_must_cancel_room", "not_room_creator",
-  "not_draft_picker",
+  "not_draft_picker", "not_map_vetoer",
 ]);
 
 function mapError(error: unknown): never {
@@ -143,6 +159,23 @@ export class PlayerMatchRoomController {
     }
     try {
       return { ok: true, matchRoom: await this.service.draftPick(roomId, viewerId(request), validation.targetPlayerAccountId) };
+    } catch (error) { return mapError(error); }
+  }
+
+  @Post(":roomId/map-veto/ban")
+  @UseGuards(PlayerCsrfGuard, PlayerAccountThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: minutes(15) } })
+  async mapVetoBan(
+    @Param("roomId") roomId: string,
+    @Body() body: unknown,
+    @Req() request: PlayerMatchRoomRequest,
+  ) {
+    const validation = validateMapVetoBanBody(body);
+    if (!validation.ok) {
+      throw new HttpException({ ok: false, error: validation.error }, HttpStatus.BAD_REQUEST);
+    }
+    try {
+      return { ok: true, matchRoom: await this.service.mapVetoBan(roomId, viewerId(request), validation.mapKey) };
     } catch (error) { return mapError(error); }
   }
 }

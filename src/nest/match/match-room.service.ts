@@ -74,4 +74,9 @@ export class MatchRoomService {
     await this.repository.draftPick(roomId, viewerId, targetPlayerAccountId);
     return this.get(roomId, viewerId);
   }
+
+  async mapVetoBan(roomId: string, viewerId: string, mapKey: string): Promise<MatchRoomSnapshot> {
+    await this.repository.mapVetoBan(roomId, viewerId, mapKey);
+    return this.get(roomId, viewerId);
+  }
 }
