@@ -4,7 +4,15 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 
 import { DatabaseService } from "../database/database.service.js";
 import { resolveMembershipEffectiveStatus } from "../membership/membership-status.js";
-import { MATCH_ROOM_CAPACITY, type MatchRoomAggregateSnapshot, type MatchRoomStatus } from "./match-room.contract.js";
+import {
+  MATCH_ROOM_CAPACITY,
+  type MatchRoomAggregateSnapshot,
+  type MatchRoomDraftAssignmentSnapshot,
+  type MatchRoomDraftAssignmentSource,
+  type MatchRoomDraftPhase,
+  type MatchRoomDraftSnapshot,
+  type MatchRoomStatus,
+} from "./match-room.contract.js";
 import { MatchRoomError, type MatchRoomErrorCode } from "./match-room.error.js";
 
 interface EligibilityRow extends RowDataPacket { account_status: string; has_steam: number; membership_status: string | null; membership_expires_at: Date | string | null; now_utc: Date | string }
@@ -14,6 +22,27 @@ interface CountRow extends RowDataPacket { participant_count: string | number }
 interface ExistsRow extends RowDataPacket { exists_flag: number }
 interface IdRow extends RowDataPacket { id: string }
 interface ConfirmationRow extends RowDataPacket { confirmed_round: string | number | null; confirmed_at: Date | string | null }
+interface DraftRow extends RowDataPacket {
+  room_id: string;
+  captain_a_player_account_id: string;
+  captain_b_player_account_id: string;
+  first_picker_player_account_id: string;
+  current_picker_player_account_id: string | null;
+  next_selection_order: string | number | null;
+  pick_deadline_at: Date | string | null;
+  completed_at: Date | string | null;
+  draft_expired?: number;
+}
+interface AssignmentRow extends RowDataPacket {
+  room_id: string;
+  player_account_id: string;
+  team: string;
+  captain: number;
+  selection_order: string | number | null;
+  source: string;
+  picker_player_account_id: string | null;
+  assigned_at: Date | string;
+}
 type MutationOutcome = { error?: MatchRoomErrorCode; retryAfterReconciliation?: boolean };
 
 function isActivePlayerUniqueViolation(error: unknown): boolean {
@@ -75,7 +104,8 @@ export class MatchRoomRepository {
   private roomSelect(lock: boolean): string {
     return `SELECT id, creator_player_account_id, status, version,
       confirmation_round, confirmation_started_at, confirmation_deadline_at, roster_locked_at,
-      (status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)) AS confirmation_expired
+      (status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)) AS confirmation_expired,
+      (status = 'SETUP' AND EXISTS(SELECT 1 FROM match_room_drafts d WHERE d.room_id = match_rooms.id AND d.completed_at IS NULL AND d.pick_deadline_at <= UTC_TIMESTAMP(6))) AS draft_expired
       FROM match_rooms WHERE id = ? LIMIT 1${lock ? " FOR UPDATE" : ""}`;
   }
 
@@ -112,9 +142,151 @@ export class MatchRoomRepository {
     return true;
   }
 
+  private async initializeDraft(connection: PoolConnection, roomId: string): Promise<void> {
+    const [participants] = await connection.execute<ParticipantRow[]>(`
+      SELECT player_account_id FROM match_room_participants
+      WHERE room_id = ? AND released_at IS NULL ORDER BY joined_at ASC
+    `, [roomId]);
+    if (participants.length !== MATCH_ROOM_CAPACITY) {
+      throw new TypeError(`Expected exactly ${MATCH_ROOM_CAPACITY} participants for draft initialization.`);
+    }
+
+    const indices = Array.from({ length: MATCH_ROOM_CAPACITY }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j]!, indices[i]!];
+    }
+    const captainAId = participants[indices[0]!]!.player_account_id;
+    const captainBId = participants[indices[1]!]!.player_account_id;
+    const firstPickerId = Math.random() < 0.5 ? captainAId : captainBId;
+
+    await connection.execute(`
+      INSERT INTO match_room_drafts (
+        room_id, captain_a_player_account_id, captain_b_player_account_id,
+        first_picker_player_account_id, current_picker_player_account_id,
+        next_selection_order, pick_deadline_at
+      ) VALUES (?, ?, ?, ?, ?, 1, DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND))
+    `, [roomId, captainAId, captainBId, firstPickerId, firstPickerId]);
+
+    await connection.execute(`
+      INSERT INTO match_room_draft_assignments (
+        room_id, player_account_id, team, captain, selection_order, source, picker_player_account_id
+      ) VALUES
+        (?, ?, 'A', 1, NULL, 'CAPTAIN', NULL),
+        (?, ?, 'B', 1, NULL, 'CAPTAIN', NULL)
+    `, [roomId, captainAId, roomId, captainBId]);
+  }
+
+  private async reconcileDraftLocked(connection: PoolConnection, room: RoomRow, draft: DraftRow): Promise<boolean> {
+    if (draft.completed_at !== null || !Boolean(draft.draft_expired)) return false;
+
+    let currentPicker = draft.current_picker_player_account_id;
+    let nextOrder = Number(draft.next_selection_order ?? 1);
+    const captainAId = draft.captain_a_player_account_id;
+    const captainBId = draft.captain_b_player_account_id;
+
+    while (currentPicker !== null) {
+      const [participants] = await connection.execute<ParticipantRow[]>(`
+        SELECT player_account_id FROM match_room_participants
+        WHERE room_id = ? AND released_at IS NULL
+      `, [room.id]);
+      const [assignments] = await connection.execute<AssignmentRow[]>(`
+        SELECT player_account_id, team FROM match_room_draft_assignments
+        WHERE room_id = ?
+      `, [room.id]);
+
+      const assignedIds = new Set(assignments.map((a) => a.player_account_id));
+      const unassigned = participants.filter((p) => !assignedIds.has(p.player_account_id));
+
+      if (unassigned.length === 0) {
+        await connection.execute(`
+          UPDATE match_room_drafts
+          SET current_picker_player_account_id = NULL, next_selection_order = NULL,
+              pick_deadline_at = NULL, completed_at = UTC_TIMESTAMP(6)
+          WHERE room_id = ?
+        `, [room.id]);
+        break;
+      }
+
+      const pickerAssignment = assignments.find((a) => a.player_account_id === currentPicker);
+      if (!pickerAssignment) throw new TypeError("Current picker does not have captain assignment.");
+      const pickerTeam = pickerAssignment.team;
+
+      // Pick a random unassigned available player
+      const randomIndex = Math.floor(Math.random() * unassigned.length);
+      const targetPlayerId = unassigned[randomIndex]!.player_account_id;
+
+      await connection.execute(`
+        INSERT INTO match_room_draft_assignments (
+          room_id, player_account_id, team, captain, selection_order, source, picker_player_account_id
+        ) VALUES (?, ?, ?, 0, ?, 'TIMEOUT_AUTO_PICK', ?)
+      `, [room.id, targetPlayerId, pickerTeam, nextOrder, currentPicker]);
+
+      const remainingAfterAutoPick = unassigned.length - 1;
+
+      if (remainingAfterAutoPick > 1) {
+        currentPicker = currentPicker === captainAId ? captainBId : captainAId;
+        nextOrder += 1;
+        await connection.execute(`
+          UPDATE match_room_drafts
+          SET current_picker_player_account_id = ?,
+              next_selection_order = ?,
+              pick_deadline_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND)
+          WHERE room_id = ?
+        `, [currentPicker, nextOrder, room.id]);
+        break;
+      } else if (remainingAfterAutoPick === 1) {
+        const newlyAssigned = new Set([...assignedIds, targetPlayerId]);
+        const lastParticipant = participants.find((p) => !newlyAssigned.has(p.player_account_id));
+        if (!lastParticipant) throw new TypeError("Expected one remaining player for auto-assignment.");
+
+        const teamACount = assignments.filter((a) => a.team === "A").length + (pickerTeam === "A" ? 1 : 0);
+        const lastTeam = teamACount === 4 ? "A" : "B";
+
+        await connection.execute(`
+          INSERT INTO match_room_draft_assignments (
+            room_id, player_account_id, team, captain, selection_order, source, picker_player_account_id
+          ) VALUES (?, ?, ?, 0, 8, 'LAST_REMAINING', NULL)
+        `, [room.id, lastParticipant.player_account_id, lastTeam]);
+
+        await connection.execute(`
+          UPDATE match_room_drafts
+          SET current_picker_player_account_id = NULL,
+              next_selection_order = NULL,
+              pick_deadline_at = NULL,
+              completed_at = UTC_TIMESTAMP(6)
+          WHERE room_id = ?
+        `, [room.id]);
+        currentPicker = null;
+        break;
+      }
+    }
+
+    await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [room.id]);
+    room.version = Number(room.version) + 1;
+    return true;
+  }
+
   private throwOutcome(outcome: MutationOutcome): void { if (outcome.error) throw new MatchRoomError(outcome.error); }
+
   private async reconcileRoom(roomId: string): Promise<void> {
-    await this.inTransaction(async (connection) => { const room = await this.lockRoom(connection, roomId); await this.reconcileLocked(connection, room); });
+    await this.inTransaction(async (connection) => {
+      const room = await this.lockRoom(connection, roomId);
+      if (!(await this.reconcileLocked(connection, room))) {
+        if (room.status === "SETUP" && Boolean(room.draft_expired)) {
+          const [draftRows] = await connection.execute<DraftRow[]>(`
+            SELECT room_id, captain_a_player_account_id, captain_b_player_account_id,
+              first_picker_player_account_id, current_picker_player_account_id,
+              next_selection_order, pick_deadline_at, completed_at,
+              (completed_at IS NULL AND pick_deadline_at <= UTC_TIMESTAMP(6)) AS draft_expired
+            FROM match_room_drafts WHERE room_id = ? FOR UPDATE
+          `, [roomId]);
+          if (draftRows[0] && Boolean(draftRows[0].draft_expired)) {
+            await this.reconcileDraftLocked(connection, room, draftRows[0]);
+          }
+        }
+      }
+    });
   }
 
   async create(playerAccountId: string): Promise<string> {
@@ -196,9 +368,114 @@ export class MatchRoomRepository {
       const [counts] = await connection.execute<CountRow[]>(`SELECT COUNT(*) AS participant_count FROM match_room_participants WHERE room_id = ? AND released_at IS NULL AND confirmed_round = ?`, [roomId, round]);
       if (Number(counts[0]?.participant_count ?? 0) === MATCH_ROOM_CAPACITY) {
         await connection.execute(`UPDATE match_rooms SET status = 'SETUP', roster_locked_at = UTC_TIMESTAMP(6), confirmation_started_at = NULL, confirmation_deadline_at = NULL, version = version + 1 WHERE id = ?`, [roomId]);
+        await this.initializeDraft(connection, roomId);
       } else await connection.execute("UPDATE match_rooms SET version = version + 1 WHERE id = ?", [roomId]);
       return {};
     }); this.throwOutcome(outcome);
+  }
+
+  async draftPick(roomId: string, viewerId: string, targetPlayerAccountId: string): Promise<void> {
+    const outcome = await this.inTransaction<MutationOutcome>(async (connection) => {
+      const room = await this.lockRoom(connection, roomId);
+      if (await this.reconcileLocked(connection, room)) return { retryAfterReconciliation: true };
+      if (room.status !== "SETUP") return { error: "room_not_drafting" };
+
+      const [draftRows] = await connection.execute<DraftRow[]>(`
+        SELECT room_id, captain_a_player_account_id, captain_b_player_account_id,
+          first_picker_player_account_id, current_picker_player_account_id,
+          next_selection_order, pick_deadline_at, completed_at,
+          (completed_at IS NULL AND pick_deadline_at <= UTC_TIMESTAMP(6)) AS draft_expired
+        FROM match_room_drafts WHERE room_id = ? FOR UPDATE
+      `, [roomId]);
+      const draft = draftRows[0];
+      if (!draft || draft.completed_at !== null) return { error: "room_not_drafting" };
+
+      if (Boolean(draft.draft_expired)) {
+        await this.reconcileDraftLocked(connection, room, draft);
+        return { error: "draft_window_closed" };
+      }
+
+      if (viewerId !== draft.current_picker_player_account_id) {
+        return { error: "not_draft_picker" };
+      }
+
+      const [participants] = await connection.execute<ParticipantRow[]>(`
+        SELECT player_account_id FROM match_room_participants
+        WHERE room_id = ? AND released_at IS NULL
+      `, [roomId]);
+      const isParticipant = participants.some((p) => p.player_account_id === targetPlayerAccountId);
+      if (!isParticipant) return { error: "draft_target_not_available" };
+
+      if (
+        targetPlayerAccountId === draft.captain_a_player_account_id ||
+        targetPlayerAccountId === draft.captain_b_player_account_id
+      ) {
+        return { error: "draft_target_not_available" };
+      }
+
+      const [assignments] = await connection.execute<AssignmentRow[]>(`
+        SELECT player_account_id, team FROM match_room_draft_assignments
+        WHERE room_id = ?
+      `, [roomId]);
+      if (assignments.some((a) => a.player_account_id === targetPlayerAccountId)) {
+        return { error: "draft_target_not_available" };
+      }
+
+      const pickerAssignment = assignments.find((a) => a.player_account_id === viewerId);
+      if (!pickerAssignment) return { error: "not_draft_picker" };
+      const pickerTeam = pickerAssignment.team;
+
+      const selectionOrder = Number(draft.next_selection_order);
+      await connection.execute(`
+        INSERT INTO match_room_draft_assignments
+          (room_id, player_account_id, team, captain, selection_order, source, picker_player_account_id)
+        VALUES (?, ?, ?, 0, ?, 'MANUAL_PICK', ?)
+      `, [roomId, targetPlayerAccountId, pickerTeam, selectionOrder, viewerId]);
+
+      const totalAssigned = assignments.length + 1;
+      const remainingCount = MATCH_ROOM_CAPACITY - totalAssigned;
+
+      if (remainingCount > 1) {
+        const nextPicker = viewerId === draft.captain_a_player_account_id
+          ? draft.captain_b_player_account_id
+          : draft.captain_a_player_account_id;
+        await connection.execute(`
+          UPDATE match_room_drafts
+          SET current_picker_player_account_id = ?,
+              next_selection_order = next_selection_order + 1,
+              pick_deadline_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 30 SECOND)
+          WHERE room_id = ?
+        `, [nextPicker, roomId]);
+      } else if (remainingCount === 1) {
+        const assignedIds = new Set([...assignments.map((a) => a.player_account_id), targetPlayerAccountId]);
+        const remainingParticipant = participants.find((p) => !assignedIds.has(p.player_account_id));
+        if (!remainingParticipant) throw new TypeError("Expected one remaining player for auto-assignment.");
+
+        const teamACount = assignments.filter((a) => a.team === "A").length + (pickerTeam === "A" ? 1 : 0);
+        const lastTeam = teamACount === 4 ? "A" : "B";
+
+        await connection.execute(`
+          INSERT INTO match_room_draft_assignments
+            (room_id, player_account_id, team, captain, selection_order, source, picker_player_account_id)
+          VALUES (?, ?, ?, 0, 8, 'LAST_REMAINING', NULL)
+        `, [roomId, remainingParticipant.player_account_id, lastTeam]);
+
+        await connection.execute(`
+          UPDATE match_room_drafts
+          SET current_picker_player_account_id = NULL,
+              next_selection_order = NULL,
+              pick_deadline_at = NULL,
+              completed_at = UTC_TIMESTAMP(6)
+          WHERE room_id = ?
+        `, [roomId]);
+      }
+
+      await connection.execute(`UPDATE match_rooms SET version = version + 1 WHERE id = ?`, [roomId]);
+      return {};
+    });
+
+    if (outcome.retryAfterReconciliation) return this.draftPick(roomId, viewerId, targetPlayerAccountId);
+    this.throwOutcome(outcome);
   }
 
   async getById(roomId: string, viewerId: string): Promise<MatchRoomAggregateSnapshot | null> {
@@ -219,8 +496,14 @@ export class MatchRoomRepository {
   }
 
   async listRelevant(viewerId: string): Promise<MatchRoomAggregateSnapshot[]> {
-    const [expired] = await this.databaseService.getPool().execute<IdRow[]>(`SELECT id FROM match_rooms WHERE status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)`);
-    for (const row of expired) await this.reconcileRoom(row.id);
+    const [expiredConfirmation] = await this.databaseService.getPool().execute<IdRow[]>(`SELECT id FROM match_rooms WHERE status = 'CONFIRMING' AND confirmation_deadline_at <= UTC_TIMESTAMP(6)`);
+    for (const row of expiredConfirmation) await this.reconcileRoom(row.id);
+    const [expiredDrafts] = await this.databaseService.getPool().execute<IdRow[]>(`
+      SELECT r.id FROM match_rooms r
+      JOIN match_room_drafts d ON d.room_id = r.id
+      WHERE r.status = 'SETUP' AND d.completed_at IS NULL AND d.pick_deadline_at <= UTC_TIMESTAMP(6)
+    `);
+    for (const row of expiredDrafts) await this.reconcileRoom(row.id);
     return this.inReadSnapshot(async (connection) => {
       const [rooms] = await connection.execute<RoomRow[]>(`SELECT DISTINCT r.id, r.creator_player_account_id, r.status, r.version, r.confirmation_round, r.confirmation_started_at, r.confirmation_deadline_at, r.roster_locked_at, 0 AS confirmation_expired FROM match_rooms r LEFT JOIN match_room_participants p ON p.room_id = r.id AND p.player_account_id = ? AND p.released_at IS NULL WHERE r.status = 'FORMING' OR p.id IS NOT NULL ORDER BY r.created_at ASC, r.id ASC`, [viewerId]);
       const context = await this.readViewerContext(connection, viewerId); return Promise.all(rooms.map((room) => this.buildSnapshot(connection, room, viewerId, context)));
@@ -244,15 +527,78 @@ export class MatchRoomRepository {
     const viewerParticipant = Boolean(viewer); const viewerCreator = room.creator_player_account_id === viewerId;
     const forming = room.status === "FORMING"; const confirming = room.status === "CONFIRMING";
     const confirmedCount = participantSnapshots.filter((participant) => participant.confirmation.confirmed).length;
+
+    let draftSnapshot: MatchRoomDraftSnapshot | null = null;
+    let canDraftPick = false;
+
+    if (room.status === "SETUP" || room.status === "CANCELLED") {
+      const [draftRows] = await connection.execute<DraftRow[]>(`
+        SELECT captain_a_player_account_id, captain_b_player_account_id,
+          first_picker_player_account_id, current_picker_player_account_id,
+          next_selection_order, pick_deadline_at, completed_at,
+          (completed_at IS NULL AND pick_deadline_at <= UTC_TIMESTAMP(6)) AS draft_expired
+        FROM match_room_drafts WHERE room_id = ? LIMIT 1
+      `, [room.id]);
+
+      if (draftRows[0]) {
+        const dRow = draftRows[0];
+        const [assignmentRows] = await connection.execute<AssignmentRow[]>(`
+          SELECT player_account_id, team, captain, selection_order, source, picker_player_account_id, assigned_at
+          FROM match_room_draft_assignments WHERE room_id = ?
+          ORDER BY assigned_at ASC, captain DESC, selection_order ASC
+        `, [room.id]);
+
+        const assignments: MatchRoomDraftAssignmentSnapshot[] = assignmentRows.map((a) => ({
+          playerAccountId: a.player_account_id,
+          team: a.team as "A" | "B",
+          captain: Boolean(a.captain),
+          selectionOrder: a.selection_order === null ? null : Number(a.selection_order),
+          source: a.source as MatchRoomDraftAssignmentSource,
+          pickerPlayerAccountId: a.picker_player_account_id,
+          assignedAt: a.assigned_at,
+        }));
+
+        const assignedPlayerIds = new Set(assignments.map((a) => a.playerAccountId));
+        const availablePlayerAccountIds = participantSnapshots
+          .map((p) => p.playerAccountId)
+          .filter((id) => !assignedPlayerIds.has(id));
+
+        const phase: MatchRoomDraftPhase = dRow.completed_at !== null ? "COMPLETED" : "PICKING";
+
+        draftSnapshot = {
+          phase,
+          captains: {
+            teamAPlayerAccountId: dRow.captain_a_player_account_id,
+            teamBPlayerAccountId: dRow.captain_b_player_account_id,
+          },
+          firstPickerPlayerAccountId: dRow.first_picker_player_account_id,
+          currentPickerPlayerAccountId: dRow.current_picker_player_account_id,
+          nextSelectionOrder: dRow.next_selection_order === null ? null : Number(dRow.next_selection_order),
+          pickDeadlineAt: dRow.pick_deadline_at,
+          availablePlayerAccountIds,
+          assignments,
+        };
+
+        const deadlineValid = Boolean(dRow.pick_deadline_at) && !Boolean(dRow.draft_expired);
+        canDraftPick =
+          viewerParticipant &&
+          room.status === "SETUP" &&
+          phase === "PICKING" &&
+          viewerId === dRow.current_picker_player_account_id &&
+          deadlineValid;
+      }
+    }
+
     return {
       room: { id: room.id, status: room.status, version: Number(room.version), creator: { playerAccountId: room.creator_player_account_id }, participantCount: participants.length, capacity: MATCH_ROOM_CAPACITY,
         confirmation: confirming && room.confirmation_started_at && room.confirmation_deadline_at ? { round, startedAt: room.confirmation_started_at, deadlineAt: room.confirmation_deadline_at, confirmedCount } : null,
-        rosterLockedAt: room.roster_locked_at, participants: participantSnapshots },
+        rosterLockedAt: room.roster_locked_at, draft: draftSnapshot, participants: participantSnapshots },
       viewer: { participant: viewerParticipant, creator: viewerCreator, actions: {
         canJoin: forming && context.eligible && !context.hasActiveRoom && participants.length < MATCH_ROOM_CAPACITY,
         canLeave: forming && viewerParticipant && !viewerCreator,
         canCancel: viewerCreator && (["FORMING", "CONFIRMING", "SETUP"] as MatchRoomStatus[]).includes(room.status),
         canConfirm: confirming && viewerParticipant && !viewer?.confirmation.confirmed,
+        canDraftPick,
       } },
     };
   }

@@ -312,7 +312,7 @@ test("eligibility gates only canJoin, never safe leave/cancel capabilities", asy
 test("list computes viewer context once inside one consistent read snapshot", async () => {
   let eligibilityReads = 0;
   const { repository, queries } = harness(async (sql) => {
-    if (sql.includes("SELECT id FROM match_rooms")) return [[], []];
+    if (sql.includes("SELECT id FROM match_rooms") || sql.includes("JOIN match_room_drafts")) return [[], []];
     if (sql.includes("SELECT DISTINCT r.id")) return [[
       { id: ROOM, creator_player_account_id: "creator", status: "FORMING", version: 1 },
       { id: "room-2", creator_player_account_id: "creator-2", status: "FORMING", version: 2 },
@@ -365,6 +365,7 @@ test("confirm records the current round once and retry is idempotent", async () 
 
 test("the tenth current-round confirmation locks the roster with one version increment", async () => {
   const statements: string[] = [];
+  const players = Array.from({ length: 10 }, (_, i) => ({ player_account_id: `p-${i}` }));
   const { repository } = harness(async (sql) => {
     statements.push(sql);
     if (sql.includes("FOR UPDATE")) return [[{
@@ -372,11 +373,12 @@ test("the tenth current-round confirmation locks the roster with one version inc
       confirmation_round: 1, confirmation_expired: 0,
     }], []];
     if (sql.includes("SELECT confirmed_round")) return [[{ confirmed_round: null, confirmed_at: null }], []];
-    if (sql.includes("COUNT(*)")) return [[{ participant_count: 10 }], []];
+    if (sql.includes("SELECT COUNT(*)")) return [[{ participant_count: 10 }], []];
+    if (sql.includes("SELECT player_account_id FROM match_room_participants")) return [players, []];
     return [{ affectedRows: 1 }, []];
   });
   await repository.confirm(ROOM, PLAYER);
-  const transition = statements.find((sql) => sql.includes("status = 'SETUP'"));
+  const transition = statements.find((sql) => sql.includes("UPDATE match_rooms") && sql.includes("status = 'SETUP'"));
   assert.ok(transition);
   assert.match(transition, /roster_locked_at = UTC_TIMESTAMP\(6\)/);
   assert.equal(statements.filter((sql) => sql.includes("version = version + 1")).length, 1);
@@ -444,10 +446,17 @@ test("snapshot treats prior-round confirmation as pending and freezes roster act
     }], []];
     if (sql.includes("SELECT a.status")) return eligibleRows();
     if (sql.includes("SELECT EXISTS")) return [[{ exists_flag: 1 }], []];
-    if (sql.includes("SELECT player_account_id")) return [[{
+    if (sql.includes("SELECT player_account_id, joined_at")) return [[{
       player_account_id: PLAYER, joined_at: "2026-08-17 11:59:00",
       confirmed_round: 4, confirmed_at: "2026-08-17 11:59:10",
     }], []];
+    if (sql.includes("FROM match_room_drafts")) return [[{
+      captain_a_player_account_id: "c1", captain_b_player_account_id: "c2",
+      first_picker_player_account_id: "c1", current_picker_player_account_id: "c1",
+      next_selection_order: 1, pick_deadline_at: "2026-08-17 12:30:00", completed_at: null,
+      draft_expired: 0,
+    }], []];
+    if (sql.includes("FROM match_room_draft_assignments")) return [[], []];
     throw new Error(`unexpected SQL: ${sql}`);
   });
   const confirming = await repository.getById(ROOM, PLAYER);
@@ -462,4 +471,140 @@ test("snapshot treats prior-round confirmation as pending and freezes roster act
   assert.equal(setup?.viewer.actions.canJoin, false);
   assert.equal(setup?.viewer.actions.canLeave, false);
   assert.equal(setup?.viewer.actions.canConfirm, false);
+});
+
+test("the tenth confirmation initializes draft with 2 distinct captains and 30s deadline", async () => {
+  const statements: string[] = [];
+  const players = Array.from({ length: 10 }, (_, i) => `player-${i}`);
+  const { repository } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE")) return [[{
+      id: ROOM, creator_player_account_id: players[0], status: "CONFIRMING", version: 10,
+      confirmation_round: 1, confirmation_expired: 0,
+    }], []];
+    if (sql.includes("SELECT confirmed_round")) return [[{ confirmed_round: null, confirmed_at: null }], []];
+    if (sql.includes("SELECT COUNT(*)")) return [[{ participant_count: 10 }], []];
+    if (sql.includes("SELECT player_account_id FROM match_room_participants")) {
+      return [players.map((p) => ({ player_account_id: p })), []];
+    }
+    return [{ affectedRows: 1 }, []];
+  });
+  await repository.confirm(ROOM, players[0]!);
+  assert.equal(statements.some((sql) => sql.includes("INSERT INTO match_room_drafts")), true);
+  assert.equal(statements.some((sql) => sql.includes("INSERT INTO match_room_draft_assignments")), true);
+});
+
+test("draftPick validates current picker and performs manual pick turn alternation", async () => {
+  const statements: string[] = [];
+  const { repository } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE") && sql.includes("FROM match_rooms")) {
+      return [[{ id: ROOM, creator_player_account_id: "c1", status: "SETUP", version: 5 }], []];
+    }
+    if (sql.includes("FROM match_room_drafts")) {
+      return [[{
+        room_id: ROOM, captain_a_player_account_id: "c1", captain_b_player_account_id: "c2",
+        first_picker_player_account_id: "c1", current_picker_player_account_id: "c1",
+        next_selection_order: 1, pick_deadline_at: "2026-08-17 12:00:30", completed_at: null,
+        draft_expired: 0,
+      }], []];
+    }
+    if (sql.includes("FROM match_room_participants")) {
+      return [[
+        { player_account_id: "c1" }, { player_account_id: "c2" },
+        { player_account_id: "p3" }, { player_account_id: "p4" },
+      ], []];
+    }
+    if (sql.includes("FROM match_room_draft_assignments")) {
+      return [[
+        { room_id: ROOM, player_account_id: "c1", team: "A", captain: 1 },
+        { room_id: ROOM, player_account_id: "c2", team: "B", captain: 1 },
+      ], []];
+    }
+    return [{ affectedRows: 1 }, []];
+  });
+
+  await assert.rejects(repository.draftPick(ROOM, "c2", "p3"), (error) =>
+    error instanceof MatchRoomError && error.code === "not_draft_picker");
+
+  await repository.draftPick(ROOM, "c1", "p3");
+  assert.equal(statements.some((sql) => sql.includes("INSERT INTO match_room_draft_assignments")), true);
+  assert.equal(statements.some((sql) => sql.includes("UPDATE match_room_drafts")), true);
+});
+
+test("draftPick reconciles expired timeout, commits changes, and throws draft_window_closed", async () => {
+  const statements: string[] = [];
+  const { repository, events } = harness(async (sql) => {
+    statements.push(sql);
+    if (sql.includes("FOR UPDATE") && sql.includes("FROM match_rooms")) {
+      return [[{ id: ROOM, creator_player_account_id: "c1", status: "SETUP", version: 5 }], []];
+    }
+    if (sql.includes("FROM match_room_drafts")) {
+      return [[{
+        room_id: ROOM, captain_a_player_account_id: "c1", captain_b_player_account_id: "c2",
+        first_picker_player_account_id: "c1", current_picker_player_account_id: "c1",
+        next_selection_order: 1, pick_deadline_at: "2026-08-17 11:59:00", completed_at: null,
+        draft_expired: 1,
+      }], []];
+    }
+    if (sql.includes("FROM match_room_participants")) {
+      return [[
+        { player_account_id: "c1" }, { player_account_id: "c2" },
+        { player_account_id: "p3" }, { player_account_id: "p4" },
+      ], []];
+    }
+    if (sql.includes("FROM match_room_draft_assignments")) {
+      return [[
+        { room_id: ROOM, player_account_id: "c1", team: "A", captain: 1 },
+        { room_id: ROOM, player_account_id: "c2", team: "B", captain: 1 },
+      ], []];
+    }
+    return [{ affectedRows: 1 }, []];
+  });
+
+  await assert.rejects(repository.draftPick(ROOM, "c1", "p3"), (error) =>
+    error instanceof MatchRoomError && error.code === "draft_window_closed");
+
+  assert.equal(statements.some((sql) => sql.includes("TIMEOUT_AUTO_PICK")), true);
+  assert.deepEqual(events, ["begin", "commit", "release"]);
+});
+
+test("snapshot exposes draft shape and canDraftPick action", async () => {
+  const { repository } = harness(async (sql) => {
+    if (sql.includes("FROM match_rooms WHERE id")) {
+      return [[{ id: ROOM, creator_player_account_id: "c1", status: "SETUP", version: 6 }], []];
+    }
+    if (sql.includes("SELECT a.status")) return eligibleRows();
+    if (sql.includes("SELECT EXISTS")) return [[{ exists_flag: 1 }], []];
+    if (sql.includes("SELECT player_account_id, joined_at")) {
+      return [[
+        { player_account_id: "c1", joined_at: "2026-08-17 12:00:00", confirmed_round: 1, confirmed_at: "time" },
+        { player_account_id: "c2", joined_at: "2026-08-17 12:00:00", confirmed_round: 1, confirmed_at: "time" },
+      ], []];
+    }
+    if (sql.includes("FROM match_room_drafts")) {
+      return [[{
+        captain_a_player_account_id: "c1", captain_b_player_account_id: "c2",
+        first_picker_player_account_id: "c1", current_picker_player_account_id: "c1",
+        next_selection_order: 1, pick_deadline_at: "2026-08-17 12:30:00", completed_at: null,
+        draft_expired: 0,
+      }], []];
+    }
+    if (sql.includes("FROM match_room_draft_assignments")) {
+      return [[
+        { player_account_id: "c1", team: "A", captain: 1, selection_order: null, source: "CAPTAIN", picker_player_account_id: null, assigned_at: "2026-08-17 12:00:00" },
+        { player_account_id: "c2", team: "B", captain: 1, selection_order: null, source: "CAPTAIN", picker_player_account_id: null, assigned_at: "2026-08-17 12:00:00" },
+      ], []];
+    }
+    throw new Error(`unexpected SQL: ${sql}`);
+  });
+
+  const snapshot = await repository.getById(ROOM, "c1");
+  assert.ok(snapshot?.room.draft);
+  assert.equal(snapshot?.room.draft.phase, "PICKING");
+  assert.equal(snapshot?.room.draft.captains.teamAPlayerAccountId, "c1");
+  assert.equal(snapshot?.viewer.actions.canDraftPick, true);
+
+  const nonPickerSnapshot = await repository.getById(ROOM, "c2");
+  assert.equal(nonPickerSnapshot?.viewer.actions.canDraftPick, false);
 });

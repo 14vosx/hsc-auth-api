@@ -4,6 +4,38 @@ export const MATCH_ROOM_CAPACITY = 10;
 
 export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "CANCELLED";
 
+export type MatchRoomDraftPhase = "PICKING" | "COMPLETED";
+
+export type MatchRoomDraftAssignmentSource =
+  | "CAPTAIN"
+  | "MANUAL_PICK"
+  | "TIMEOUT_AUTO_PICK"
+  | "LAST_REMAINING";
+
+export interface MatchRoomDraftAssignmentSnapshot {
+  playerAccountId: string;
+  team: "A" | "B";
+  captain: boolean;
+  selectionOrder: number | null;
+  source: MatchRoomDraftAssignmentSource;
+  pickerPlayerAccountId: string | null;
+  assignedAt: Date | string;
+}
+
+export interface MatchRoomDraftSnapshot {
+  phase: MatchRoomDraftPhase;
+  captains: {
+    teamAPlayerAccountId: string;
+    teamBPlayerAccountId: string;
+  };
+  firstPickerPlayerAccountId: string;
+  currentPickerPlayerAccountId: string | null;
+  nextSelectionOrder: number | null;
+  pickDeadlineAt: Date | string | null;
+  availablePlayerAccountIds: string[];
+  assignments: MatchRoomDraftAssignmentSnapshot[];
+}
+
 export interface MatchRoomAggregateParticipantSnapshot {
   playerAccountId: string;
   joinedAt: Date | string;
@@ -32,6 +64,7 @@ interface MatchRoomSnapshotShape<Participant> {
       confirmedCount: number;
     } | null;
     rosterLockedAt: Date | string | null;
+    draft: MatchRoomDraftSnapshot | null;
     participants: Participant[];
   };
   viewer: {
@@ -42,6 +75,7 @@ interface MatchRoomSnapshotShape<Participant> {
       canLeave: boolean;
       canCancel: boolean;
       canConfirm: boolean;
+      canDraftPick: boolean;
     };
   };
 }

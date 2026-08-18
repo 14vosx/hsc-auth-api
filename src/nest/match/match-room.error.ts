@@ -16,7 +16,11 @@ export type MatchRoomErrorCode =
   | "membership_inactive"
   | "membership_suspended"
   | "membership_expired"
-  | "membership_cancelled";
+  | "membership_cancelled"
+  | "room_not_drafting"
+  | "not_draft_picker"
+  | "draft_target_not_available"
+  | "draft_window_closed";
 
 export class MatchRoomError extends Error {
   constructor(readonly code: MatchRoomErrorCode) {
