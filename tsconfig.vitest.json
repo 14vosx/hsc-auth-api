@@ -7,9 +7,9 @@
     "types": ["node"]
   },
   "include": [
-    "src/nest/**/*.ts",
-    "test/vitest/**/*.spec.ts",
-    "test/vitest/setup.ts",
+    "src/**/*.ts",
+    "test/vitest/**/*.ts",
+    "test/vitest/**/*.js",
     "vitest.config.ts"
   ],
   "exclude": [
