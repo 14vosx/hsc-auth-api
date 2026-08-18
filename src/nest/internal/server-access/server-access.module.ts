@@ -8,6 +8,9 @@ import {
 import {
   ServerAccessRepository,
 } from "./server-access.repository.js";
+import {
+  ContextualServerAccessRepository,
+} from "./contextual-server-access.repository.js";
 
 @Module({
   controllers: [
@@ -15,6 +18,7 @@ import {
   ],
   providers: [
     ServerAccessRepository,
+    ContextualServerAccessRepository,
   ],
   exports: [
     ServerAccessRepository,
