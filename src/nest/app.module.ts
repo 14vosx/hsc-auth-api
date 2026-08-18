@@ -23,6 +23,7 @@ import { AdminMembershipModule } from "./admin/membership/admin-membership.modul
 import { AdminPlayerAccountsModule } from "./admin/player-accounts/admin-player-accounts.module.js";
 import { PlayerAnalyticsModule } from "./internal/player-analytics/player-analytics.module.js";
 import { MatchIngressModule } from "./internal/match/match-ingress.module.js";
+import { MatchBridgeModule } from "./internal/match-bridge/match-bridge.module.js";
 import { PlayerMatchRoomModule } from "./player/match-room/player-match-room.module.js";
 import { PlayerPresentationReferenceModule } from "./player/presentation-reference/player-presentation-reference.module.js";
 
@@ -55,6 +56,7 @@ export class AppModule {
         AdminPlayerAccountsModule,
         PlayerAnalyticsModule,
         MatchIngressModule,
+        MatchBridgeModule,
         PlayerMatchRoomModule,
         PlayerPresentationReferenceModule,
       ],
