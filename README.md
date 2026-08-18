@@ -361,7 +361,20 @@ GET  /health
 
 /internal/steam/*
 /internal/server-access/*
+/internal/match-bridge/*
 ```
+
+## Match Bridge Protocol (Internal)
+
+A Auth API expõe o protocolo de controle para o HSC Match Bridge:
+
+- **Autenticação dedicada**: `x-hsc-bridge-key` (chave interna exclusiva por `bridgeNodeKey`, sem reutilizar chaves de Server Access);
+- **Autoridade central**: o `bridgeNodeKey` é derivado exclusivamente do digest SHA-256 da credencial armazenada na tabela `match_bridge_nodes`;
+- **Heartbeat**: `POST /internal/match-bridge/heartbeat` (atualiza apenas `last_seen_at` do nó autenticado);
+- **Claim atômico**: `POST /internal/match-bridge/commands/claim` (claim FIFO atômico com lease de 30s, token aleatório e construção do Match Spec v1 a partir de snapshot congelado de `competitive_matches` e `competitive_match_roster`);
+- **Resultado idempotente**: `POST /internal/match-bridge/commands/:commandId/result` (validação de lease ativo/correto; para `PREPARE_MATCH`, sucesso exige estritamente `resultCode = 'PREPARED'`);
+- **Fronteira G1**: a confirmação `PREPARED` é evidência central de sucesso; não avança a sala para `JOINABLE` nem altera `match_server_assignments`.
+
 
 O README não define o contrato completo de cada endpoint.
 
