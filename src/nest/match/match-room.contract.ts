@@ -3,7 +3,7 @@ import type { CompetitiveMatchSnapshot } from "./competitive-match/competitive-m
 
 export const MATCH_ROOM_CAPACITY = 10;
 
-export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "READY" | "CANCELLED";
+export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "READY" | "PROVISIONING" | "CANCELLED";
 
 export type MatchRoomDraftPhase = "PICKING" | "COMPLETED";
 

@@ -664,7 +664,7 @@ export class MatchRoomRepository {
   async confirm(roomId: string, playerAccountId: string): Promise<void> {
     const outcome = await this.inTransaction<MutationOutcome>(async (connection) => {
       const room = await this.lockRoom(connection, roomId);
-      if (room.status === "SETUP" || room.status === "READY") {
+      if (room.status === "SETUP" || room.status === "READY" || room.status === "PROVISIONING") {
         const [rows] = await connection.execute<ConfirmationRow[]>(`SELECT confirmed_round, confirmed_at FROM match_room_participants WHERE room_id = ? AND player_account_id = ? AND released_at IS NULL LIMIT 1`, [roomId, playerAccountId]);
         return Number(rows[0]?.confirmed_round) === Number(room.confirmation_round) ? {} : { error: "room_not_confirmable" };
       }
@@ -949,7 +949,7 @@ export class MatchRoomRepository {
     let mapVetoSnapshot: MatchRoomMapVetoSnapshot | null = null;
     let canMapVetoBan = false;
 
-    if (room.status === "SETUP" || room.status === "READY" || room.status === "CANCELLED") {
+    if (room.status === "SETUP" || room.status === "READY" || room.status === "PROVISIONING" || room.status === "CANCELLED") {
       const [draftRows] = await connection.execute<DraftRow[]>(`
         SELECT captain_a_player_account_id, captain_b_player_account_id,
           first_picker_player_account_id, current_picker_player_account_id,
