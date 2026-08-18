@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { MatchRoomError } from "../../../src/nest/match/match-room.error.js";
 import { MatchRoomRepository } from "../../../src/nest/match/match-room.repository.js";
 import { MatchMapPoolRepository } from "../../../src/nest/match/map-pool/match-map-pool.repository.js";
+import { CompetitiveMatchRepository } from "../../../src/nest/match/competitive-match/competitive-match.repository.js";
 
 const PLAYER = "11111111-1111-4111-8111-111111111111";
 const ROOM = "22222222-2222-4222-8222-222222222222";
@@ -30,7 +31,8 @@ function harness(execute: (sql: string, values?: unknown[]) => Promise<any>) {
     getPool() { return { execute, async getConnection() { return connection; } }; },
   } as any;
   const matchMapPoolRepository = new MatchMapPoolRepository(databaseService);
-  const repository = new MatchRoomRepository(databaseService, matchMapPoolRepository);
+  const competitiveMatchRepository = new CompetitiveMatchRepository(databaseService);
+  const repository = new MatchRoomRepository(databaseService, matchMapPoolRepository, competitiveMatchRepository);
   return { repository, events, queries };
 }
 

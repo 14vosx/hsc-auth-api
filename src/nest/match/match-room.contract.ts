@@ -1,8 +1,9 @@
 import type { PlayerPresentationReference } from "../player/presentation-reference/player-presentation-reference.contract.js";
+import type { CompetitiveMatchSnapshot } from "./competitive-match/competitive-match.contract.js";
 
 export const MATCH_ROOM_CAPACITY = 10;
 
-export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "CANCELLED";
+export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "READY" | "CANCELLED";
 
 export type MatchRoomDraftPhase = "PICKING" | "COMPLETED";
 
@@ -97,8 +98,10 @@ interface MatchRoomSnapshotShape<Participant> {
       confirmedCount: number;
     } | null;
     rosterLockedAt: Date | string | null;
+    readyAt: Date | string | null;
     draft: MatchRoomDraftSnapshot | null;
     mapVeto: MatchRoomMapVetoSnapshot | null;
+    competitiveMatch: CompetitiveMatchSnapshot | null;
     participants: Participant[];
   };
   viewer: {
