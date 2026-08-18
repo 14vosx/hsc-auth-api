@@ -36,6 +36,39 @@ export interface MatchRoomDraftSnapshot {
   assignments: MatchRoomDraftAssignmentSnapshot[];
 }
 
+export type MatchRoomMapVetoPhase = "BANNING" | "COMPLETED";
+
+export type MatchRoomMapVetoActionSource = "MANUAL_BAN" | "TIMEOUT_AUTO_BAN";
+
+export interface MatchRoomMapVetoActionSnapshot {
+  actionOrder: number;
+  mapKey: string;
+  actorPlayerAccountId: string;
+  source: MatchRoomMapVetoActionSource;
+  actedAt: Date | string;
+}
+
+export interface MatchRoomMapVetoSnapshot {
+  phase: MatchRoomMapVetoPhase;
+  pool: {
+    id: string;
+    key: string;
+    version: number;
+    maps: readonly {
+      key: string;
+      displayName: string;
+      position: number;
+    }[];
+  };
+  firstVetoerPlayerAccountId: string;
+  currentVetoerPlayerAccountId: string | null;
+  nextActionOrder: number | null;
+  actionDeadlineAt: Date | string | null;
+  availableMapKeys: string[];
+  selectedMapKey: string | null;
+  actions: MatchRoomMapVetoActionSnapshot[];
+}
+
 export interface MatchRoomAggregateParticipantSnapshot {
   playerAccountId: string;
   joinedAt: Date | string;
@@ -65,6 +98,7 @@ interface MatchRoomSnapshotShape<Participant> {
     } | null;
     rosterLockedAt: Date | string | null;
     draft: MatchRoomDraftSnapshot | null;
+    mapVeto: MatchRoomMapVetoSnapshot | null;
     participants: Participant[];
   };
   viewer: {
@@ -76,6 +110,7 @@ interface MatchRoomSnapshotShape<Participant> {
       canCancel: boolean;
       canConfirm: boolean;
       canDraftPick: boolean;
+      canMapVetoBan: boolean;
     };
   };
 }

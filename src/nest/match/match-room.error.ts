@@ -20,7 +20,11 @@ export type MatchRoomErrorCode =
   | "room_not_drafting"
   | "not_draft_picker"
   | "draft_target_not_available"
-  | "draft_window_closed";
+  | "draft_window_closed"
+  | "room_not_vetoing"
+  | "not_map_vetoer"
+  | "map_veto_target_not_available"
+  | "map_veto_window_closed";
 
 export class MatchRoomError extends Error {
   constructor(readonly code: MatchRoomErrorCode) {

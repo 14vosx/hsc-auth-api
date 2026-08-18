@@ -1,7 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import type { RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
+import mysql from "mysql2/promise";
 import { DatabaseService } from "../../database/database.service.js";
-import type { RawMatchMapPool } from "./match-map-pool.contract.js";
+import {
+  MIX_5V5_MAP_POOL_KEY,
+  type RawMatchMapPool,
+} from "./match-map-pool.contract.js";
 
 interface PoolRow extends RowDataPacket {
   id: string;
@@ -20,10 +24,11 @@ interface EntryRow extends RowDataPacket {
 export class MatchMapPoolRepository {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findActivePool(poolKey: string): Promise<RawMatchMapPool | null> {
-    const pool = this.databaseService.getPool();
-
-    const [poolRows] = await pool.execute<PoolRow[]>(
+  async findActivePoolOnConnection(
+    connection: PoolConnection | mysql.Pool,
+    poolKey: string = MIX_5V5_MAP_POOL_KEY,
+  ): Promise<RawMatchMapPool | null> {
+    const [poolRows] = await connection.execute<PoolRow[]>(
       `SELECT id, pool_key, version, status
        FROM match_map_pools
        WHERE pool_key = ? AND status = 'ACTIVE'
@@ -36,7 +41,7 @@ export class MatchMapPoolRepository {
       return null;
     }
 
-    const [entryRows] = await pool.execute<EntryRow[]>(
+    const [entryRows] = await connection.execute<EntryRow[]>(
       `SELECT map_key, display_name, position
        FROM match_map_pool_entries
        WHERE pool_id = ?
@@ -55,5 +60,12 @@ export class MatchMapPoolRepository {
         position: Number(row.position),
       })),
     };
+  }
+
+  async findActivePool(poolKey: string): Promise<RawMatchMapPool | null> {
+    return this.findActivePoolOnConnection(
+      this.databaseService.getPool(),
+      poolKey,
+    );
   }
 }

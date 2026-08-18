@@ -4,6 +4,6 @@ import { MatchMapPoolService } from "./match-map-pool.service.js";
 
 @Module({
   providers: [MatchMapPoolRepository, MatchMapPoolService],
-  exports: [MatchMapPoolService],
+  exports: [MatchMapPoolService, MatchMapPoolRepository],
 })
 export class MatchMapPoolModule {}
