@@ -20,6 +20,7 @@ import {
   MatchBridgeError,
   MatchBridgeRepository,
 } from "./match-bridge.repository.js";
+import { ServerAssignmentService } from "../../match/server-assignment/server-assignment.service.js";
 
 const ALLOWED_RESULT_BODY_KEYS = new Set([
   "leaseToken",
@@ -33,6 +34,8 @@ export class MatchBridgeController {
   constructor(
     @Inject(MatchBridgeRepository)
     private readonly matchBridgeRepository: MatchBridgeRepository,
+    @Inject(ServerAssignmentService)
+    private readonly serverAssignmentService: ServerAssignmentService,
   ) {}
 
   private async authenticate(
@@ -82,8 +85,16 @@ export class MatchBridgeController {
     @Headers() headers: Record<string, string | string[] | undefined>,
   ): Promise<ClaimCommandResponse> {
     const bridgeNodeKey = await this.authenticate(headers);
-    const command =
+    let command =
       await this.matchBridgeRepository.claimNextCommand(bridgeNodeKey);
+
+    if (command === null) {
+      await this.serverAssignmentService.assignNextReadyForBridgeNode(
+        bridgeNodeKey,
+      );
+      command =
+        await this.matchBridgeRepository.claimNextCommand(bridgeNodeKey);
+    }
 
     return {
       ok: true,
