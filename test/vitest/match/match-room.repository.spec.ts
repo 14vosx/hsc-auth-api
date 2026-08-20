@@ -72,3 +72,135 @@ test("confirm during CONFIRMING status queries participant using both roomId and
   assert.ok(participantQuery, "Participant lookup query was executed");
   assert.deepEqual(participantQuery.values, [roomId, playerAccountId]);
 });
+
+test("Scenario J: getById accepts and returns JOINABLE/FAILED lifecycle metadata", async () => {
+  const roomId = "room-uuid-789";
+  const playerAccountId = "player-uuid-456";
+  const joinableAt = new Date();
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "JOINABLE",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: joinableAt,
+                    failed_at: null,
+                    failure_reason: null,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: playerAccountId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.room.status, "JOINABLE");
+  assert.equal(snapshot.room.joinableAt, joinableAt);
+  assert.equal(snapshot.room.failedAt, null);
+  assert.equal(snapshot.room.failureReason, null);
+});
+
+test("Scenario J2: getById accepts and returns FAILED lifecycle metadata", async () => {
+  const roomId = "room-uuid-999";
+  const playerAccountId = "player-uuid-456";
+  const failedAt = new Date();
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "FAILED",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: null,
+                    failed_at: failedAt,
+                    failure_reason: "prepare_match_failed",
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: playerAccountId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.room.status, "FAILED");
+  assert.equal(snapshot.room.joinableAt, null);
+  assert.equal(snapshot.room.failedAt, failedAt);
+  assert.equal(snapshot.room.failureReason, "prepare_match_failed");
+});
