@@ -25,6 +25,7 @@ interface CompetitiveMatchRosterRow extends RowDataPacket {
   competitive_match_id: string;
   player_account_id: string;
   steamid64: string;
+  steam_personaname: string | null;
   team: string;
   created_at: Date | string;
 }
@@ -57,9 +58,9 @@ export class CompetitiveMatchRepository {
     for (const entry of input.roster) {
       await connection.execute(
         `INSERT INTO competitive_match_roster (
-          competitive_match_id, player_account_id, steamid64, team
-        ) VALUES (?, ?, ?, ?)`,
-        [id, entry.playerAccountId, entry.steamid64, entry.team],
+          competitive_match_id, player_account_id, steamid64, steam_personaname, team
+        ) VALUES (?, ?, ?, ?, ?)`,
+        [id, entry.playerAccountId, entry.steamid64, entry.steamPersonaname, entry.team],
       );
     }
 
@@ -104,7 +105,7 @@ export class CompetitiveMatchRepository {
     }
 
     const [rosterRows] = await connection.execute<CompetitiveMatchRosterRow[]>(
-      `SELECT competitive_match_id, player_account_id, steamid64, team, created_at
+      `SELECT competitive_match_id, player_account_id, steamid64, steam_personaname, team, created_at
        FROM competitive_match_roster WHERE competitive_match_id = ?
        ORDER BY team ASC, player_account_id ASC`,
       [row.id],
@@ -123,6 +124,7 @@ export class CompetitiveMatchRepository {
       roster: rosterRows.map((r) => ({
         playerAccountId: r.player_account_id,
         steamid64: r.steamid64,
+        steamPersonaname: r.steam_personaname ?? "",
         team: r.team as "A" | "B",
       })),
     });

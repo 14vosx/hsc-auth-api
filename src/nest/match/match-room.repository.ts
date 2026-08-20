@@ -310,13 +310,16 @@ export class MatchRoomRepository {
     );
 
     const [steamRows] = await connection.execute<RowDataPacket[]>(
-      `SELECT player_account_id, steamid64 FROM player_steam_identities
-       WHERE player_account_id IN (${participantAccountIds.map(() => "?").join(",") || "''"})`,
+      `SELECT psi.player_account_id, psi.steamid64, sp.personaname
+       FROM player_steam_identities psi
+       LEFT JOIN steam_profiles sp ON sp.steamid64 = psi.steamid64
+       WHERE psi.player_account_id IN (${participantAccountIds.map(() => "?").join(",") || "''"})`,
       participantAccountIds,
     );
     const steamIdentities = steamRows.map((r) => ({
       playerAccountId: r.player_account_id as string,
       steamid64: r.steamid64 as string,
+      personaname: (r.personaname as string | null) ?? null,
     }));
 
     const validated = validateCompetitiveMatchSetupInvariants({
