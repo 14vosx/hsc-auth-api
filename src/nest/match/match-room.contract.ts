@@ -97,6 +97,11 @@ export interface MatchRoomParticipantSnapshot extends MatchRoomAggregateParticip
   player: PlayerPresentationReference | null;
 }
 
+export interface MatchRoomViewerJoinSnapshot {
+  serverKey: string;
+  reference: string;
+}
+
 interface MatchRoomSnapshotShape<Participant> {
   room: {
     id: string;
@@ -131,7 +136,9 @@ interface MatchRoomSnapshotShape<Participant> {
       canConfirm: boolean;
       canDraftPick: boolean;
       canMapVetoBan: boolean;
+      canJoinServer: boolean;
     };
+    join: MatchRoomViewerJoinSnapshot | null;
   };
 }
 
