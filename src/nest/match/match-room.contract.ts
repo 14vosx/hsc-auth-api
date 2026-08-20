@@ -3,7 +3,21 @@ import type { CompetitiveMatchSnapshot } from "./competitive-match/competitive-m
 
 export const MATCH_ROOM_CAPACITY = 10;
 
-export type MatchRoomStatus = "FORMING" | "CONFIRMING" | "SETUP" | "READY" | "PROVISIONING" | "CANCELLED";
+export type MatchRoomStatus =
+  | "FORMING"
+  | "CONFIRMING"
+  | "SETUP"
+  | "READY"
+  | "PROVISIONING"
+  | "CANCELLED"
+  | "JOINABLE"
+  | "FAILED";
+
+export type MatchRoomFailureReason =
+  | "prepare_match_failed"
+  | "roster_eligibility_lost"
+  | "server_resource_unavailable"
+  | null;
 
 export type MatchRoomDraftPhase = "PICKING" | "COMPLETED";
 
@@ -99,6 +113,9 @@ interface MatchRoomSnapshotShape<Participant> {
     } | null;
     rosterLockedAt: Date | string | null;
     readyAt: Date | string | null;
+    joinableAt: Date | string | null;
+    failedAt: Date | string | null;
+    failureReason: MatchRoomFailureReason;
     draft: MatchRoomDraftSnapshot | null;
     mapVeto: MatchRoomMapVetoSnapshot | null;
     competitiveMatch: CompetitiveMatchSnapshot | null;
