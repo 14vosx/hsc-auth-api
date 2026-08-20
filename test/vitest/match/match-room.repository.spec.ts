@@ -204,3 +204,281 @@ test("Scenario J2: getById accepts and returns FAILED lifecycle metadata", async
   assert.equal(snapshot.room.failedAt, failedAt);
   assert.equal(snapshot.room.failureReason, "prepare_match_failed");
 });
+
+test("Scenario K1: JOINABLE + eligible participant + active assignment + enabled resource + linked frozen Steam pair populates viewer.join and canJoinServer", async () => {
+  const roomId = "room-uuid-101";
+  const playerAccountId = "player-uuid-456";
+  const joinableAt = new Date();
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "JOINABLE",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: joinableAt,
+                    failed_at: null,
+                    failure_reason: null,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: playerAccountId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                if (sql.includes("FROM competitive_matches cm")) {
+                  return [[{
+                    server_key: "sv-match-01",
+                    resource_enabled: 1,
+                    join_reference: "connect 127.0.0.1:27015",
+                    frozen_steamid64: "76561198000000001",
+                    linked_steamid64: "76561198000000001",
+                  }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.viewer.actions.canJoinServer, true);
+  assert.deepEqual(snapshot.viewer.join, {
+    serverKey: "sv-match-01",
+    reference: "connect 127.0.0.1:27015",
+  });
+});
+
+test("Scenario K2: JOINABLE non-participant viewer gets canJoinServer: false and join: null", async () => {
+  const roomId = "room-uuid-102";
+  const nonParticipantId = "viewer-uuid-999";
+  const creatorId = "creator-uuid-111";
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: creatorId,
+                    status: "JOINABLE",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: new Date(),
+                    failed_at: null,
+                    failure_reason: null,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: creatorId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, nonParticipantId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.viewer.participant, false);
+  assert.equal(snapshot.viewer.actions.canJoinServer, false);
+  assert.equal(snapshot.viewer.join, null);
+});
+
+test("Scenario K3: PROVISIONING non-JOINABLE state gets canJoinServer: false and join: null", async () => {
+  const roomId = "room-uuid-103";
+  const playerAccountId = "player-uuid-456";
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "PROVISIONING",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: null,
+                    failed_at: null,
+                    failure_reason: null,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: playerAccountId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.viewer.actions.canJoinServer, false);
+  assert.equal(snapshot.viewer.join, null);
+});
+
+test("Scenario K4: JOINABLE participant whose frozen Steam pair is no longer linked gets canJoinServer: false and join: null", async () => {
+  const roomId = "room-uuid-104";
+  const playerAccountId = "player-uuid-456";
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "JOINABLE",
+                    version: 2,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: new Date(),
+                    failed_at: null,
+                    failure_reason: null,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[{ player_account_id: playerAccountId, joined_at: new Date(), confirmed_round: 1, confirmed_at: new Date() }]];
+                }
+
+                if (sql.includes("FROM competitive_matches cm")) {
+                  return [[{
+                    server_key: "sv-match-01",
+                    resource_enabled: 1,
+                    join_reference: "connect 127.0.0.1:27015",
+                    frozen_steamid64: "76561198000000001",
+                    linked_steamid64: null,
+                  }]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.viewer.actions.canJoinServer, false);
+  assert.equal(snapshot.viewer.join, null);
+});

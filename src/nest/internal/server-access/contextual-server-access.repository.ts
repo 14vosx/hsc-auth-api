@@ -15,7 +15,9 @@ export type ContextualServerAccessReason =
   | "server_disabled"
   | "server_unassigned"
   | "not_match_roster"
-  | "server_preparing";
+  | "server_preparing"
+  | "match_joinable"
+  | "match_failed";
 
 export interface ContextualServerAccessDecision {
   readonly authorized: boolean;
@@ -189,11 +191,6 @@ export class ContextualServerAccessRepository {
       throw new TypeError("Active assignment context is structurally inconsistent.");
     }
 
-    // In Slice H1, the only expected status for a room with active assignment is PROVISIONING
-    if (row.room_status !== "PROVISIONING") {
-      throw new TypeError(`Unexpected match room status '${row.room_status}' for active assignment.`);
-    }
-
     // 8. Frozen CompetitiveMatch roster contains the exact player identity pair
     if (!row.roster_player_account_id) {
       return {
@@ -202,10 +199,28 @@ export class ContextualServerAccessRepository {
       };
     }
 
-    // 9. MatchRoom phase determines contextual admission (PROVISIONING -> server_preparing)
-    return {
-      authorized: false,
-      reason: "server_preparing",
-    };
+    // 9. MatchRoom status determines contextual admission
+    if (row.room_status === "PROVISIONING") {
+      return {
+        authorized: false,
+        reason: "server_preparing",
+      };
+    }
+
+    if (row.room_status === "JOINABLE") {
+      return {
+        authorized: true,
+        reason: "match_joinable",
+      };
+    }
+
+    if (row.room_status === "FAILED") {
+      return {
+        authorized: false,
+        reason: "match_failed",
+      };
+    }
+
+    throw new TypeError(`Unexpected match room status '${row.room_status}' for active assignment.`);
   }
 }

@@ -24,6 +24,7 @@ import {
   type MatchRoomMapVetoPhase,
   type MatchRoomMapVetoSnapshot,
   type MatchRoomStatus,
+  type MatchRoomViewerJoinSnapshot,
 } from "./match-room.contract.js";
 import { MatchRoomError, type MatchRoomErrorCode } from "./match-room.error.js";
 
@@ -34,6 +35,13 @@ interface CountRow extends RowDataPacket { participant_count: string | number }
 interface ExistsRow extends RowDataPacket { exists_flag: number }
 interface IdRow extends RowDataPacket { id: string }
 interface ConfirmationRow extends RowDataPacket { confirmed_round: string | number | null; confirmed_at: Date | string | null }
+interface ViewerJoinRow extends RowDataPacket {
+  server_key: string;
+  resource_enabled: number | null;
+  join_reference: string | null;
+  frozen_steamid64: string;
+  linked_steamid64: string | null;
+}
 interface DraftRow extends RowDataPacket {
   room_id: string;
   captain_a_player_account_id: string;
@@ -1087,6 +1095,53 @@ export class MatchRoomRepository {
 
     const competitiveMatchSnapshot = await this.competitiveMatchRepository.findByRoomIdOnConnection(connection, room.id);
 
+    let canJoinServer = false;
+    let viewerJoin: MatchRoomViewerJoinSnapshot | null = null;
+
+    if (room.status === "JOINABLE" && viewerParticipant && context.eligible) {
+      const [joinRows] = await connection.execute<ViewerJoinRow[]>(
+        `
+          SELECT
+            a.server_key,
+            sr.enabled AS resource_enabled,
+            sr.join_reference,
+            r.steamid64 AS frozen_steamid64,
+            s.steamid64 AS linked_steamid64
+          FROM competitive_matches cm
+          JOIN match_server_assignments a
+            ON a.competitive_match_id = cm.id
+            AND a.released_at IS NULL
+          JOIN match_server_resources sr
+            ON sr.server_key = a.server_key
+          JOIN competitive_match_roster r
+            ON r.competitive_match_id = cm.id
+            AND r.player_account_id = ?
+          LEFT JOIN player_steam_identities s
+            ON s.player_account_id = r.player_account_id
+            AND s.steamid64 = r.steamid64
+          WHERE cm.room_id = ?
+          LIMIT 1
+        `,
+        [viewerId, room.id],
+      );
+
+      const joinRow = joinRows[0];
+      if (
+        joinRow &&
+        Number(joinRow.resource_enabled) === 1 &&
+        typeof joinRow.join_reference === "string" &&
+        joinRow.join_reference.trim().length > 0 &&
+        joinRow.linked_steamid64 &&
+        joinRow.linked_steamid64 === joinRow.frozen_steamid64
+      ) {
+        canJoinServer = true;
+        viewerJoin = {
+          serverKey: joinRow.server_key,
+          reference: joinRow.join_reference,
+        };
+      }
+    }
+
     return {
       room: { id: room.id, status: room.status, version: Number(room.version), creator: { playerAccountId: room.creator_player_account_id }, participantCount: participants.length, capacity: MATCH_ROOM_CAPACITY,
         confirmation: confirming && room.confirmation_started_at && room.confirmation_deadline_at ? { round, startedAt: room.confirmation_started_at, deadlineAt: room.confirmation_deadline_at, confirmedCount } : null,
@@ -1098,7 +1153,8 @@ export class MatchRoomRepository {
         canConfirm: confirming && viewerParticipant && !viewer?.confirmation.confirmed,
         canDraftPick,
         canMapVetoBan,
-      } },
+        canJoinServer,
+      }, join: viewerJoin },
     };
   }
 }
