@@ -100,6 +100,7 @@ export interface MatchRoomParticipantSnapshot extends MatchRoomAggregateParticip
 export interface MatchRoomViewerJoinSnapshot {
   serverKey: string;
   reference: string;
+  launchUri: string;
 }
 
 interface MatchRoomSnapshotShape<Participant> {

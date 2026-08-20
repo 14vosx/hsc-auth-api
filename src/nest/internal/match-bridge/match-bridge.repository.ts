@@ -69,6 +69,7 @@ interface FinalizationContextRow extends RowDataPacket {
   resource_server_key: string | null;
   resource_enabled: number | null;
   resource_join_reference: string | null;
+  resource_launch_uri: string | null;
   room_id: string;
   room_status: string;
   room_version: string | number;
@@ -435,6 +436,7 @@ export class MatchBridgeRepository {
          sr.server_key AS resource_server_key,
          sr.enabled AS resource_enabled,
          sr.join_reference AS resource_join_reference,
+         sr.launch_uri AS resource_launch_uri,
          r.id AS room_id,
          r.status AS room_status,
          r.version AS room_version,
@@ -515,7 +517,9 @@ export class MatchBridgeRepository {
     const isResourceUsable =
       Number(ctx.resource_enabled) === 1 &&
       typeof ctx.resource_join_reference === "string" &&
-      ctx.resource_join_reference.trim().length > 0;
+      ctx.resource_join_reference.trim().length > 0 &&
+      typeof ctx.resource_launch_uri === "string" &&
+      ctx.resource_launch_uri.trim().length > 0;
 
     if (!isResourceUsable) {
       const [result] = await connection.execute<ResultSetHeader>(

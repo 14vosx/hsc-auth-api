@@ -85,6 +85,7 @@ describe("MatchBridgeRepository — submitCommandResult finalization", () => {
     resource_server_key: "sv-1",
     resource_enabled: 1,
     resource_join_reference: "connect 127.0.0.1:27015",
+    resource_launch_uri: "steam://connect/127.0.0.1:27015",
     room_id: "room-1",
     room_status: "PROVISIONING",
     room_version: 1,
@@ -315,6 +316,75 @@ describe("MatchBridgeRepository — submitCommandResult finalization", () => {
       if (isCommandLookup(sql)) return [[{ ...baseCommandRow }]];
       if (sql.includes("UPDATE match_server_commands")) return [{ affectedRows: 1 }];
       if (sql.includes("FROM match_server_commands c")) return [[{ ...baseContextRow, resource_enabled: 0 }]];
+      if (sql.includes("UPDATE match_rooms")) return [{ affectedRows: 1 }];
+      return [[]];
+    });
+
+    const repo = new MatchBridgeRepository(databaseService);
+    await repo.submitCommandResult(bridgeNodeKey, commandId, {
+      leaseToken,
+      outcome: "SUCCEEDED",
+      resultCode: "PREPARED",
+    });
+
+    const roomUpdate = executedQueries.find((q) => q.sql.includes("UPDATE match_rooms"));
+    expect(roomUpdate?.sql).toContain("failure_reason = 'server_resource_unavailable'");
+
+    const releaseQuery = executedQueries.find((q) => q.sql.includes("UPDATE match_server_assignments"));
+    expect(releaseQuery).toBeUndefined();
+  });
+
+  it("Scenario E1: assigned ServerResource blank join reference -> FAILED (server_resource_unavailable)", async () => {
+    const { databaseService, executedQueries } = mockDatabaseService((sql) => {
+      if (isCommandLookup(sql)) return [[{ ...baseCommandRow }]];
+      if (sql.includes("UPDATE match_server_commands")) return [{ affectedRows: 1 }];
+      if (sql.includes("FROM match_server_commands c")) return [[{ ...baseContextRow, resource_join_reference: "   " }]];
+      if (sql.includes("UPDATE match_rooms")) return [{ affectedRows: 1 }];
+      return [[]];
+    });
+
+    const repo = new MatchBridgeRepository(databaseService);
+    await repo.submitCommandResult(bridgeNodeKey, commandId, {
+      leaseToken,
+      outcome: "SUCCEEDED",
+      resultCode: "PREPARED",
+    });
+
+    const roomUpdate = executedQueries.find((q) => q.sql.includes("UPDATE match_rooms"));
+    expect(roomUpdate?.sql).toContain("failure_reason = 'server_resource_unavailable'");
+
+    const releaseQuery = executedQueries.find((q) => q.sql.includes("UPDATE match_server_assignments"));
+    expect(releaseQuery).toBeUndefined();
+  });
+
+  it("Scenario E2: assigned ServerResource null launch_uri -> FAILED (server_resource_unavailable)", async () => {
+    const { databaseService, executedQueries } = mockDatabaseService((sql) => {
+      if (isCommandLookup(sql)) return [[{ ...baseCommandRow }]];
+      if (sql.includes("UPDATE match_server_commands")) return [{ affectedRows: 1 }];
+      if (sql.includes("FROM match_server_commands c")) return [[{ ...baseContextRow, resource_launch_uri: null }]];
+      if (sql.includes("UPDATE match_rooms")) return [{ affectedRows: 1 }];
+      return [[]];
+    });
+
+    const repo = new MatchBridgeRepository(databaseService);
+    await repo.submitCommandResult(bridgeNodeKey, commandId, {
+      leaseToken,
+      outcome: "SUCCEEDED",
+      resultCode: "PREPARED",
+    });
+
+    const roomUpdate = executedQueries.find((q) => q.sql.includes("UPDATE match_rooms"));
+    expect(roomUpdate?.sql).toContain("failure_reason = 'server_resource_unavailable'");
+
+    const releaseQuery = executedQueries.find((q) => q.sql.includes("UPDATE match_server_assignments"));
+    expect(releaseQuery).toBeUndefined();
+  });
+
+  it("Scenario E3: assigned ServerResource whitespace-only launch_uri -> FAILED (server_resource_unavailable)", async () => {
+    const { databaseService, executedQueries } = mockDatabaseService((sql) => {
+      if (isCommandLookup(sql)) return [[{ ...baseCommandRow }]];
+      if (sql.includes("UPDATE match_server_commands")) return [{ affectedRows: 1 }];
+      if (sql.includes("FROM match_server_commands c")) return [[{ ...baseContextRow, resource_launch_uri: "   " }]];
       if (sql.includes("UPDATE match_rooms")) return [{ affectedRows: 1 }];
       return [[]];
     });

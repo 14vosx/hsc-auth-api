@@ -39,6 +39,7 @@ interface ViewerJoinRow extends RowDataPacket {
   server_key: string;
   resource_enabled: number | null;
   join_reference: string | null;
+  launch_uri: string | null;
   frozen_steamid64: string;
   linked_steamid64: string | null;
 }
@@ -1105,6 +1106,7 @@ export class MatchRoomRepository {
             a.server_key,
             sr.enabled AS resource_enabled,
             sr.join_reference,
+            sr.launch_uri,
             r.steamid64 AS frozen_steamid64,
             s.steamid64 AS linked_steamid64
           FROM competitive_matches cm
@@ -1131,6 +1133,8 @@ export class MatchRoomRepository {
         Number(joinRow.resource_enabled) === 1 &&
         typeof joinRow.join_reference === "string" &&
         joinRow.join_reference.trim().length > 0 &&
+        typeof joinRow.launch_uri === "string" &&
+        joinRow.launch_uri.trim().length > 0 &&
         joinRow.linked_steamid64 &&
         joinRow.linked_steamid64 === joinRow.frozen_steamid64
       ) {
@@ -1138,6 +1142,7 @@ export class MatchRoomRepository {
         viewerJoin = {
           serverKey: joinRow.server_key,
           reference: joinRow.join_reference,
+          launchUri: joinRow.launch_uri,
         };
       }
     }
