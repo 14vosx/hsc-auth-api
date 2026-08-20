@@ -671,7 +671,7 @@ export class MatchRoomRepository {
       if (await this.reconcileLocked(connection, room)) return { error: "confirmation_window_closed" };
       if (room.status !== "CONFIRMING") return { error: "room_not_confirmable" };
       const round = Number(room.confirmation_round);
-      const [participants] = await connection.execute<ConfirmationRow[]>(`SELECT confirmed_round, confirmed_at FROM match_room_participants WHERE room_id = ? AND player_account_id = ? AND released_at IS NULL LIMIT 1`, [playerAccountId]);
+      const [participants] = await connection.execute<ConfirmationRow[]>(`SELECT confirmed_round, confirmed_at FROM match_room_participants WHERE room_id = ? AND player_account_id = ? AND released_at IS NULL LIMIT 1`, [roomId, playerAccountId]);
       if (!participants[0]) return { error: "not_room_participant" };
       if (Number(participants[0].confirmed_round) === round) return {};
       await connection.execute(`UPDATE match_room_participants SET confirmed_round = ?, confirmed_at = UTC_TIMESTAMP(6) WHERE room_id = ? AND player_account_id = ? AND released_at IS NULL`, [round, roomId, playerAccountId]);
