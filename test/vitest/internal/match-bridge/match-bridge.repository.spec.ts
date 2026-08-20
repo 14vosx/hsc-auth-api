@@ -97,6 +97,7 @@ describe("MatchBridgeRepository — submitCommandResult finalization", () => {
   const valid10FrozenRoster = Array.from({ length: 10 }, (_, i) => ({
     player_account_id: `p-${i + 1}`,
     steamid64: `7656119800000000${i + 1}`,
+    steam_personaname: `Player_${i + 1}`,
     team: i < 5 ? "A" : "B",
   }));
 

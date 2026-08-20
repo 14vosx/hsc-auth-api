@@ -90,8 +90,8 @@ test("MatchBridgeController claim: existing command has priority without trigger
         displayName: "Dust II",
       },
       teams: {
-        A: [{ playerAccountId: "p1", steamid64: "76561198000000001" }],
-        B: [{ playerAccountId: "p2", steamid64: "76561198000000002" }],
+        A: [{ playerAccountId: "p1", steamid64: "76561198000000001", personaname: "Player 1" }],
+        B: [{ playerAccountId: "p2", steamid64: "76561198000000002", personaname: "Player 2" }],
       },
     },
   };
@@ -152,8 +152,8 @@ test("MatchBridgeController claim: empty queue triggers allocation and returns p
         displayName: "Inferno",
       },
       teams: {
-        A: [{ playerAccountId: "p1", steamid64: "76561198000000001" }],
-        B: [{ playerAccountId: "p2", steamid64: "76561198000000002" }],
+        A: [{ playerAccountId: "p1", steamid64: "76561198000000001", personaname: "Player 1" }],
+        B: [{ playerAccountId: "p2", steamid64: "76561198000000002", personaname: "Player 2" }],
       },
     },
   };

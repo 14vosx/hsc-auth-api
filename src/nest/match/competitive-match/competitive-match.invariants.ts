@@ -25,6 +25,7 @@ export function validateCompetitiveMatchSetupInvariants(params: {
   readonly steamIdentities: readonly {
     readonly playerAccountId: string;
     readonly steamid64: string;
+    readonly personaname?: string | null;
   }[];
 }): {
   readonly map: CompetitiveMatchMapSnapshot;
@@ -90,30 +91,35 @@ export function validateCompetitiveMatchSetupInvariants(params: {
   }
 
   // Steam identities
-  const steamMap = new Map<string, string>();
+  const steamMap = new Map<string, { steamid64: string; personaname: string }>();
   for (const identity of params.steamIdentities) {
     if (typeof identity.steamid64 !== "string" || !/^\d{17}$/.test(identity.steamid64)) {
       throw new TypeError(`Invalid steamid64 format for player ${identity.playerAccountId}.`);
     }
-    steamMap.set(identity.playerAccountId, identity.steamid64);
+    const personaname = identity.personaname?.trim();
+    if (!personaname) {
+      throw new TypeError(`Invalid or missing Steam personaname for player ${identity.playerAccountId}.`);
+    }
+    steamMap.set(identity.playerAccountId, { steamid64: identity.steamid64, personaname });
   }
 
   const distinctSteamIds = new Set<string>();
   const roster: CompetitiveMatchRosterEntry[] = [];
 
   for (const assignment of params.draftAssignments) {
-    const steamid64 = steamMap.get(assignment.playerAccountId);
-    if (!steamid64) {
+    const steamInfo = steamMap.get(assignment.playerAccountId);
+    if (!steamInfo) {
       throw new TypeError(`Player ${assignment.playerAccountId} does not have a linked Steam identity.`);
     }
-    if (distinctSteamIds.has(steamid64)) {
-      throw new TypeError(`Duplicate SteamID64 detected: ${steamid64}.`);
+    if (distinctSteamIds.has(steamInfo.steamid64)) {
+      throw new TypeError(`Duplicate SteamID64 detected: ${steamInfo.steamid64}.`);
     }
-    distinctSteamIds.add(steamid64);
+    distinctSteamIds.add(steamInfo.steamid64);
 
     roster.push({
       playerAccountId: assignment.playerAccountId,
-      steamid64,
+      steamid64: steamInfo.steamid64,
+      steamPersonaname: steamInfo.personaname,
       team: assignment.team as "A" | "B",
     });
   }

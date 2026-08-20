@@ -39,6 +39,7 @@ export function buildAndValidateMatchSpecV1(params: {
   readonly rosterRows: readonly {
     readonly player_account_id: string;
     readonly steamid64: string;
+    readonly steam_personaname?: string | null;
     readonly team: string;
   }[];
 }): MatchSpecV1 {
@@ -87,9 +88,15 @@ export function buildAndValidateMatchSpecV1(params: {
     }
     steamIds.add(steamid64);
 
+    const personaname = row.steam_personaname?.trim();
+    if (!personaname) {
+      throw new TypeError(`Invalid or empty steam_personaname in match roster for player ${playerId}.`);
+    }
+
     const playerEntry: MatchSpecPlayerV1 = {
       playerAccountId: playerId,
       steamid64,
+      personaname,
     };
 
     if (row.team === "A") {

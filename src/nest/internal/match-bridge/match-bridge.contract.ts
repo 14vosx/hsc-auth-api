@@ -5,6 +5,7 @@ export const SPEC_VERSION = 1;
 export interface MatchSpecPlayerV1 {
   readonly playerAccountId: string;
   readonly steamid64: string;
+  readonly personaname: string;
 }
 
 export interface MatchSpecMapV1 {

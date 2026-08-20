@@ -3,6 +3,7 @@ export const RUNTIME_MATCH_ID_START = 1_000_000;
 export interface CompetitiveMatchRosterEntry {
   readonly playerAccountId: string;
   readonly steamid64: string;
+  readonly steamPersonaname: string;
   readonly team: "A" | "B";
 }
 

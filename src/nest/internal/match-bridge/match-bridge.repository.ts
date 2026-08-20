@@ -39,6 +39,7 @@ interface LeaseTimestampRow extends RowDataPacket {
 interface RosterRow extends RowDataPacket {
   player_account_id: string;
   steamid64: string;
+  steam_personaname: string | null;
   team: string;
 }
 
@@ -222,7 +223,7 @@ export class MatchBridgeRepository {
 
       // 5. Load roster for authoritative Match Spec v1 construction
       const [rosterRows] = await connection.execute<RosterRow[]>(
-        `SELECT player_account_id, steamid64, team
+        `SELECT player_account_id, steamid64, steam_personaname, team
          FROM competitive_match_roster
          WHERE competitive_match_id = ?
          ORDER BY team ASC, created_at ASC`,

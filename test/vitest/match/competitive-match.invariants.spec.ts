@@ -28,6 +28,7 @@ const VALID_PARAMS = {
   steamIdentities: PLAYERS.map((playerAccountId, idx) => ({
     playerAccountId,
     steamid64: STEAM_IDS[idx]!,
+    personaname: `PlayerName_${idx + 1}`,
   })),
 };
 
@@ -40,6 +41,7 @@ test("validateCompetitiveMatchSetupInvariants validates and builds snapshot for 
   assert.equal(result.roster.filter((r) => r.team === "A").length, 5);
   assert.equal(result.roster.filter((r) => r.team === "B").length, 5);
   assert.equal(result.roster[0]?.steamid64, STEAM_IDS[0]);
+  assert.equal(result.roster[0]?.steamPersonaname, "PlayerName_1");
 });
 
 test("validateCompetitiveMatchSetupInvariants throws if room is not SETUP", () => {
@@ -97,6 +99,19 @@ test("validateCompetitiveMatchSetupInvariants throws if steam identity is missin
   );
 });
 
+test("validateCompetitiveMatchSetupInvariants throws if steam personaname is missing or empty", () => {
+  assert.throws(
+    () =>
+      validateCompetitiveMatchSetupInvariants({
+        ...VALID_PARAMS,
+        steamIdentities: VALID_PARAMS.steamIdentities.map((s, idx) =>
+          idx === 0 ? { ...s, personaname: "   " } : s,
+        ),
+      }),
+    /Invalid or missing Steam personaname/,
+  );
+});
+
 test("validateCompetitiveMatchRuntimeSnapshot enforces runtimeMatchId >= 1_000_000", () => {
   const mapSnapshot = {
     poolId: VALID_PARAMS.mapMetadata.poolId,
@@ -112,6 +127,7 @@ test("validateCompetitiveMatchRuntimeSnapshot enforces runtimeMatchId >= 1_000_0
     roster: VALID_PARAMS.draftAssignments.map((a, idx) => ({
       playerAccountId: a.playerAccountId,
       steamid64: STEAM_IDS[idx]!,
+      steamPersonaname: `PlayerName_${idx + 1}`,
       team: a.team as "A" | "B",
     })),
   });
