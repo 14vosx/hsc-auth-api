@@ -44,11 +44,11 @@ test("buildAppConfig - defaults", () => {
   );
   assert.equal(
     config.playerSteamAuth.successRedirectUrl,
-    "/portal/cs2-next/bunker",
+    "/portal/cs2/bunker",
   );
   assert.equal(
     config.playerSteamAuth.failureRedirectUrl,
-    "/portal/cs2-next/login?error=steam_auth_failed",
+    "/portal/cs2/bunker?error=steam_auth_failed",
   );
   assert.equal(config.playerSteamAuth.callbackRedirectEnabled, false);
 

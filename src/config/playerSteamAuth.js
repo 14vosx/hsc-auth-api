@@ -45,12 +45,12 @@ export function buildPlayerSteamAuthConfig(
   const loginUrl = "https://steamcommunity.com/openid/login";
   const successRedirectUrl = parseRedirectUrl(
     env.PLAYER_AUTH_SUCCESS_REDIRECT_URL,
-    "/portal/cs2-next/bunker",
+    "/portal/cs2/bunker",
     "PLAYER_AUTH_SUCCESS_REDIRECT_URL",
   );
   const failureRedirectUrl = parseRedirectUrl(
     env.PLAYER_AUTH_FAILURE_REDIRECT_URL,
-    "/portal/cs2-next/login?error=steam_auth_failed",
+    "/portal/cs2/bunker?error=steam_auth_failed",
     "PLAYER_AUTH_FAILURE_REDIRECT_URL",
   );
   const callbackRedirectEnabled = parseBoolean(
