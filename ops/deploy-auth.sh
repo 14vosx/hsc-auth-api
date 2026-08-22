@@ -158,8 +158,32 @@ ENV_FILE="$ENV_FILE" npm run db:migrate
 echo "➡️  Reiniciando serviço: $SERVICE"
 sudo /usr/bin/systemctl restart "$SERVICE"
 
-echo "➡️  Aguardando 2s..."
-sleep 2
+echo "➡️  Aguardando readiness da aplicação ($HEALTH_URL)..."
+READINESS_TIMEOUT_SECONDS=30
+POLL_INTERVAL_SECONDS=1
+SECONDS=0
+READY=false
+
+while (( SECONDS < READINESS_TIMEOUT_SECONDS )); do
+  RESPONSE="$(curl -fsS --max-time 2 "$HEALTH_URL" 2>/dev/null || true)"
+  if [[ -n "$RESPONSE" ]] && echo "$RESPONSE" | grep -q '"ok":true' && echo "$RESPONSE" | grep -q '"ready":true'; then
+    READY=true
+    break
+  fi
+  sleep "$POLL_INTERVAL_SECONDS"
+  echo "⏳ Aguardando subida do serviço (${SECONDS}s/${READINESS_TIMEOUT_SECONDS}s)..."
+done
+
+if [[ "$READY" != "true" ]]; then
+  echo "❌ Timeout atingido (${READINESS_TIMEOUT_SECONDS}s) aguardando readiness em $HEALTH_URL."
+  echo "➡️  Status do serviço:"
+  sudo /usr/bin/systemctl status "$SERVICE" --no-pager -l | sed -n '1,12p' || true
+  echo "➡️  Últimos logs do serviço (journalctl):"
+  sudo /usr/bin/journalctl -u "$SERVICE" -n 80 --no-pager || true
+  exit 1
+fi
+
+echo "✅ Aplicação pronta para receber tráfego (readiness OK após ${SECONDS}s)."
 
 echo "➡️  Status do serviço:"
 sudo /usr/bin/systemctl status "$SERVICE" --no-pager -l | sed -n '1,12p'
