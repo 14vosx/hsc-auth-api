@@ -12,6 +12,7 @@ import { PlayerAccountModule } from "./player/account/player-account.module.js";
 import { PlayerBunkerModule } from "./player/bunker/player-bunker.module.js";
 import { PlayerProfileModule } from "./player/profile/player-profile.module.js";
 import { PlayerMembershipModule } from "./player/membership/player-membership.module.js";
+import { PlayerEntitlementsModule } from "./player/entitlements/player-entitlements.module.js";
 import { PlayerServerAccessModule } from "./player/server-access/player-server-access.module.js";
 import { AdminUsersModule } from "./admin/users/admin-users.module.js";
 import { AdminNewsModule } from "./admin/news/admin-news.module.js";
@@ -45,6 +46,7 @@ export class AppModule {
         PlayerBunkerModule,
         PlayerProfileModule,
         PlayerMembershipModule,
+        PlayerEntitlementsModule,
         PlayerServerAccessModule,
         AdminUsersModule,
         AdminNewsModule,
