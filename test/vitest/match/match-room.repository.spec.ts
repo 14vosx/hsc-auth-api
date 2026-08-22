@@ -632,3 +632,80 @@ test("Scenario K4: JOINABLE participant whose frozen Steam pair is no longer lin
   assert.equal(snapshot.viewer.actions.canJoinServer, false);
   assert.equal(snapshot.viewer.join, null);
 });
+
+test("Scenario C: getById accepts and returns COMPLETED terminal lifecycle metadata and completedAt", async () => {
+  const roomId = "room-uuid-completed-123";
+  const playerAccountId = "player-uuid-456";
+  const completedAt = new Date("2026-08-22T12:00:00.000Z");
+
+  const repository = new MatchRoomRepository(
+    {
+      getPool() {
+        return {
+          async getConnection() {
+            return {
+              async beginTransaction() {},
+              async commit() {},
+              async rollback() {},
+              async query() {},
+              release() {},
+              async execute(sql: string) {
+                if (sql.includes("FROM match_rooms WHERE id = ?")) {
+                  return [[{
+                    id: roomId,
+                    creator_player_account_id: playerAccountId,
+                    status: "COMPLETED",
+                    version: 5,
+                    confirmation_round: 1,
+                    confirmation_started_at: null,
+                    confirmation_deadline_at: null,
+                    roster_locked_at: new Date(),
+                    ready_at: new Date(),
+                    joinable_at: new Date(),
+                    failed_at: null,
+                    failure_reason: null,
+                    completed_at: completedAt,
+                    confirmation_expired: 0,
+                  }]];
+                }
+
+                if (sql.includes("FROM player_accounts a")) {
+                  return [[{ account_status: "active", has_steam: 1, membership_status: "active", membership_expires_at: null, now_utc: new Date() }]];
+                }
+
+                if (sql.includes("FROM match_room_participants")) {
+                  return [[]];
+                }
+
+                if (sql.includes("FROM match_room_drafts WHERE room_id = ?")) {
+                  return [[]];
+                }
+
+                if (sql.includes("FROM match_room_map_vetos WHERE room_id = ?")) {
+                  return [[]];
+                }
+
+                return [[]];
+              },
+            };
+          },
+        };
+      },
+    } as any,
+    {} as any,
+    {
+      async findByRoomIdOnConnection() {
+        return null;
+      },
+    } as any,
+  );
+
+  const snapshot = await repository.getById(roomId, playerAccountId);
+  assert.ok(snapshot);
+  assert.equal(snapshot.room.status, "COMPLETED");
+  assert.equal(snapshot.room.completedAt, completedAt);
+  assert.equal(snapshot.viewer.actions.canJoin, false);
+  assert.equal(snapshot.viewer.actions.canLeave, false);
+  assert.equal(snapshot.viewer.actions.canCancel, false);
+  assert.equal(snapshot.viewer.actions.canJoinServer, false);
+});

@@ -11,7 +11,8 @@ export type MatchRoomStatus =
   | "PROVISIONING"
   | "CANCELLED"
   | "JOINABLE"
-  | "FAILED";
+  | "FAILED"
+  | "COMPLETED";
 
 export type MatchRoomFailureReason =
   | "prepare_match_failed"
@@ -122,6 +123,7 @@ interface MatchRoomSnapshotShape<Participant> {
     joinableAt: Date | string | null;
     failedAt: Date | string | null;
     failureReason: MatchRoomFailureReason;
+    completedAt: Date | string | null;
     draft: MatchRoomDraftSnapshot | null;
     mapVeto: MatchRoomMapVetoSnapshot | null;
     competitiveMatch: CompetitiveMatchSnapshot | null;
